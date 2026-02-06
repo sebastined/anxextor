@@ -1,0 +1,652 @@
+from __future__ import annotations
+
+import ssl
+import time
+from datetime import datetime, timezone
+from time import perf_counter
+from typing import Dict, List, Optional, Tuple
+
+import dns.resolver
+import httpx
+
+from .config import settings
+from .models import ScanFinding, ScanResult
+from .scoring import score_from_findings
+from .security import TargetValidationError, normalize_url, validate_public_target
+
+USER_AGENT = "anxextor/0.1"
+REQUEST_TIMEOUT = settings.http_timeout_seconds
+RETRY_COUNT = settings.http_retries
+
+
+def _finding(
+    finding_id: str,
+    title: str,
+    severity: str,
+    description: str,
+    recommendation: str,
+) -> ScanFinding:
+    return ScanFinding(
+        id=finding_id,
+        title=title,
+        severity=severity,
+        description=description,
+        recommendation=recommendation,
+    )
+
+
+def _check_headers(
+    headers: Dict[str, str],
+    set_cookies: List[str],
+    is_https: bool,
+) -> List[ScanFinding]:
+    findings: List[ScanFinding] = []
+
+    csp = headers.get("content-security-policy")
+    if not csp:
+        findings.append(
+            _finding(
+                "missing_csp",
+                "Missing Content-Security-Policy",
+                "high",
+                "CSP is not present, increasing XSS risk.",
+                "Add a strict Content-Security-Policy header.",
+            )
+        )
+    else:
+        if "frame-ancestors" not in csp:
+            findings.append(
+                _finding(
+                    "missing_frame_ancestors",
+                    "CSP missing frame-ancestors",
+                    "medium",
+                    "CSP does not set frame-ancestors.",
+                    "Add frame-ancestors to prevent clickjacking.",
+                )
+            )
+
+    hsts = headers.get("strict-transport-security")
+    if not hsts:
+        findings.append(
+            _finding(
+                "missing_hsts",
+                "Missing Strict-Transport-Security",
+                "medium",
+                "HSTS is not enabled.",
+                "Add Strict-Transport-Security with a long max-age.",
+            )
+        )
+    elif "max-age" in hsts and "max-age=" in hsts:
+        try:
+            max_age = int(hsts.split("max-age=")[1].split(";")[0])
+            if max_age < 15552000:
+                findings.append(
+                    _finding(
+                        "weak_hsts",
+                        "HSTS max-age too low",
+                        "low",
+                        "HSTS max-age is shorter than 6 months.",
+                        "Set max-age to at least 15552000.",
+                    )
+                )
+        except ValueError:
+            findings.append(
+                _finding(
+                    "invalid_hsts",
+                    "Invalid HSTS header",
+                    "low",
+                    "HSTS max-age value could not be parsed.",
+                    "Set a valid max-age value.",
+                )
+            )
+
+    if "x-frame-options" not in headers:
+        findings.append(
+            _finding(
+                "missing_xfo",
+                "Missing X-Frame-Options",
+                "medium",
+                "X-Frame-Options is not present.",
+                "Add X-Frame-Options or frame-ancestors in CSP.",
+            )
+        )
+
+    if "x-content-type-options" not in headers:
+        findings.append(
+            _finding(
+                "missing_xcto",
+                "Missing X-Content-Type-Options",
+                "low",
+                "X-Content-Type-Options is not present.",
+                "Add X-Content-Type-Options: nosniff.",
+            )
+        )
+
+    referrer_policy = headers.get("referrer-policy")
+    if not referrer_policy:
+        findings.append(
+            _finding(
+                "missing_referrer_policy",
+                "Missing Referrer-Policy",
+                "low",
+                "Referrer-Policy is not present.",
+                "Add a Referrer-Policy header.",
+            )
+        )
+    else:
+        strong_policies = {
+            "no-referrer",
+            "strict-origin",
+            "strict-origin-when-cross-origin",
+        }
+        if referrer_policy.lower() not in strong_policies:
+            findings.append(
+                _finding(
+                    "weak_referrer_policy",
+                    "Referrer-Policy is weak",
+                    "low",
+                    f"Referrer-Policy is set to '{referrer_policy}'.",
+                    "Use strict-origin-when-cross-origin or no-referrer.",
+                )
+            )
+
+    if "permissions-policy" not in headers:
+        findings.append(
+            _finding(
+                "missing_permissions_policy",
+                "Missing Permissions-Policy",
+                "low",
+                "Permissions-Policy is not present.",
+                "Define Permissions-Policy to limit browser features.",
+            )
+        )
+
+    if "cross-origin-opener-policy" not in headers:
+        findings.append(
+            _finding(
+                "missing_coop",
+                "Missing Cross-Origin-Opener-Policy",
+                "info",
+                "COOP is not present.",
+                "Set Cross-Origin-Opener-Policy for isolation.",
+            )
+        )
+
+    if "cross-origin-embedder-policy" not in headers:
+        findings.append(
+            _finding(
+                "missing_coep",
+                "Missing Cross-Origin-Embedder-Policy",
+                "info",
+                "COEP is not present.",
+                "Set Cross-Origin-Embedder-Policy if needed.",
+            )
+        )
+
+    findings.extend(_cookie_findings(set_cookies, is_https))
+    findings.extend(_cache_findings(headers))
+
+    if "server" in headers:
+        findings.append(
+            _finding(
+                "server_header_exposed",
+                "Server header exposed",
+                "info",
+                "The Server header can reveal implementation details.",
+                "Remove or minimize the Server header value.",
+            )
+        )
+
+    return findings
+
+
+def _cookie_findings(set_cookies: List[str], is_https: bool) -> List[ScanFinding]:
+    findings: List[ScanFinding] = []
+    if not set_cookies:
+        return findings
+
+    missing_secure = []
+    missing_httponly = []
+    missing_samesite = []
+    secure_prefix_violations = []
+    host_prefix_violations = []
+
+    for cookie in set_cookies:
+        parts = [part.strip() for part in cookie.split(";") if part.strip()]
+        name = parts[0].split("=", 1)[0] if parts else "unknown"
+        attribute_parts = parts[1:]
+        attributes = {part.lower() for part in attribute_parts}
+        attribute_map = {}
+        for attr in attribute_parts:
+            if "=" in attr:
+                key, value = attr.split("=", 1)
+                attribute_map[key.strip().lower()] = value.strip()
+
+        has_secure = "secure" in attributes
+        has_httponly = "httponly" in attributes
+        has_samesite = any(part.lower().startswith("samesite=") for part in attribute_parts)
+        samesite_value = attribute_map.get("samesite", "").lower()
+        domain_value = attribute_map.get("domain")
+        path_value = attribute_map.get("path")
+
+        if is_https and not has_secure:
+            missing_secure.append(name)
+        if not has_httponly:
+            missing_httponly.append(name)
+        if not has_samesite:
+            missing_samesite.append(name)
+
+        if name.startswith("__Secure-") and not has_secure:
+            secure_prefix_violations.append(name)
+
+        if name.startswith("__Host-"):
+            if not has_secure or (path_value and path_value != "/") or domain_value:
+                host_prefix_violations.append(name)
+
+        if samesite_value == "none" and not has_secure:
+            findings.append(
+                _finding(
+                    "cookie_samesite_none_without_secure",
+                    "SameSite=None without Secure",
+                    "high",
+                    f"Cookie {name} sets SameSite=None without Secure.",
+                    "Add Secure when SameSite=None is used.",
+                )
+            )
+
+    if not is_https:
+        findings.append(
+            _finding(
+                "cookies_over_http",
+                "Cookies set over HTTP",
+                "medium",
+                "Cookies were set on a non-HTTPS response.",
+                "Serve cookies only over HTTPS.",
+            )
+        )
+
+    if missing_secure:
+        findings.append(
+            _finding(
+                "cookie_missing_secure",
+                "Cookies missing Secure flag",
+                "medium",
+                f"Cookies without Secure: {', '.join(missing_secure)}.",
+                "Add the Secure flag to all cookies on HTTPS.",
+            )
+        )
+
+    if missing_httponly:
+        findings.append(
+            _finding(
+                "cookie_missing_httponly",
+                "Cookies missing HttpOnly flag",
+                "low",
+                f"Cookies without HttpOnly: {', '.join(missing_httponly)}.",
+                "Add HttpOnly to cookies not used by client-side JS.",
+            )
+        )
+
+    if missing_samesite:
+        findings.append(
+            _finding(
+                "cookie_missing_samesite",
+                "Cookies missing SameSite",
+                "low",
+                f"Cookies without SameSite: {', '.join(missing_samesite)}.",
+                "Set SameSite=Lax or Strict for most cookies.",
+            )
+        )
+
+    if secure_prefix_violations:
+        findings.append(
+            _finding(
+                "cookie_secure_prefix_violation",
+                "__Secure- cookies missing Secure",
+                "medium",
+                f"__Secure- cookies without Secure: {', '.join(secure_prefix_violations)}.",
+                "Ensure __Secure- cookies always include Secure.",
+            )
+        )
+
+    if host_prefix_violations:
+        findings.append(
+            _finding(
+                "cookie_host_prefix_violation",
+                "__Host- cookie prefix misuse",
+                "medium",
+                f"__Host- cookies violating requirements: {', '.join(host_prefix_violations)}.",
+                "Ensure __Host- cookies use Secure, Path=/, and no Domain.",
+            )
+        )
+
+    return findings
+
+
+def _cache_findings(headers: Dict[str, str]) -> List[ScanFinding]:
+    findings: List[ScanFinding] = []
+    cache_control = headers.get("cache-control", "")
+
+    if not cache_control:
+        findings.append(
+            _finding(
+                "missing_cache_control",
+                "Missing Cache-Control",
+                "low",
+                "Cache-Control header is not present.",
+                "Add Cache-Control to define caching behavior.",
+            )
+        )
+        return findings
+
+    if "public" in cache_control:
+        findings.append(
+            _finding(
+                "cache_control_public",
+                "Cache-Control is public",
+                "medium",
+                "Response is marked as public cacheable.",
+                "Use private or no-store for sensitive responses.",
+            )
+        )
+    elif all(token not in cache_control for token in ["no-store", "private", "no-cache"]):
+        findings.append(
+            _finding(
+                "cache_control_weak",
+                "Cache-Control may be permissive",
+                "low",
+                "Caching directives do not include no-store/private/no-cache.",
+                "Review caching directives for sensitive responses.",
+            )
+        )
+
+    return findings
+
+
+def _redirect_findings(schemes: List[str]) -> List[ScanFinding]:
+    findings: List[ScanFinding] = []
+
+    if len(schemes) <= 1:
+        return findings
+
+    if len(schemes) > 4:
+        findings.append(
+            _finding(
+                "redirect_chain_long",
+                "Redirect chain is long",
+                "low",
+                f"Redirect chain length is {len(schemes) - 1}.",
+                "Reduce redirect hops for faster and safer navigation.",
+            )
+        )
+
+    for previous, current in zip(schemes, schemes[1:]):
+        if previous == "https" and current == "http":
+            findings.append(
+                _finding(
+                    "redirect_downgrade",
+                    "Redirect downgrades HTTPS to HTTP",
+                    "medium",
+                    "A redirect downgrades from HTTPS to HTTP.",
+                    "Avoid downgrading to HTTP in redirects.",
+                )
+            )
+            break
+
+    return findings
+
+
+def _tls_info(hostname: str) -> Tuple[Optional[Dict[str, str]], List[ScanFinding]]:
+    findings: List[ScanFinding] = []
+    try:
+        context = ssl.create_default_context()
+        with context.wrap_socket(
+            ssl.SSLSocket(),
+            server_hostname=hostname,
+        ) as sock:
+            sock.connect((hostname, 443))
+            cert = sock.getpeercert()
+            protocol = sock.version() or "unknown"
+            cipher = sock.cipher()[0] if sock.cipher() else "unknown"
+
+        not_after = cert.get("notAfter")
+        expiry_days = None
+        if not_after:
+            expires = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
+            expires = expires.replace(tzinfo=timezone.utc)
+            expiry_days = (expires - datetime.now(timezone.utc)).days
+            if expiry_days < 0:
+                findings.append(
+                    _finding(
+                        "cert_expired",
+                        "TLS certificate expired",
+                        "high",
+                        "TLS certificate is expired.",
+                        "Renew the TLS certificate immediately.",
+                    )
+                )
+            elif expiry_days <= 14:
+                findings.append(
+                    _finding(
+                        "cert_expiring_soon",
+                        "TLS certificate expiring soon",
+                        "medium",
+                        "TLS certificate expires within 14 days.",
+                        "Renew the TLS certificate soon.",
+                    )
+                )
+
+        if protocol in {"TLSv1", "TLSv1.1"}:
+            findings.append(
+                _finding(
+                    "weak_tls",
+                    "Weak TLS protocol",
+                    "high",
+                    f"Server negotiates {protocol}.",
+                    "Disable TLS 1.0/1.1 and require TLS 1.2+.",
+                )
+            )
+
+        tls_data = {
+            "protocol": protocol,
+            "cipher": cipher,
+            "days_until_expiry": expiry_days,
+        }
+        return tls_data, findings
+    except Exception:
+        findings.append(
+            _finding(
+                "tls_error",
+                "TLS handshake failed",
+                "medium",
+                "Could not complete TLS handshake.",
+                "Check TLS configuration and ensure port 443 is reachable.",
+            )
+        )
+        return None, findings
+
+
+def _dns_records(domain: str) -> Dict[str, bool]:
+    resolver = dns.resolver.Resolver()
+
+    def has_txt(name: str, prefix: str) -> bool:
+        try:
+            answers = resolver.resolve(name, "TXT")
+            for record in answers:
+                value = "".join(segment.decode() for segment in record.strings)
+                if value.lower().startswith(prefix):
+                    return True
+        except Exception:
+            return False
+        return False
+
+    def has_rr(name: str, rtype: str) -> bool:
+        try:
+            resolver.resolve(name, rtype)
+            return True
+        except Exception:
+            return False
+
+    return {
+        "spf": has_txt(domain, "v=spf1"),
+        "dmarc": has_txt(f"_dmarc.{domain}", "v=dmarc1"),
+        "caa": has_rr(domain, "CAA"),
+        "dnssec": has_rr(domain, "DS"),
+    }
+
+
+def _dns_findings(domain: str, records: Dict[str, bool]) -> List[ScanFinding]:
+    findings: List[ScanFinding] = []
+
+    if not records.get("spf"):
+        findings.append(
+            _finding(
+                "missing_spf",
+                "Missing SPF record",
+                "low",
+                "No SPF record detected.",
+                "Add a v=spf1 TXT record to authorize senders.",
+            )
+        )
+
+    if not records.get("dmarc"):
+        findings.append(
+            _finding(
+                "missing_dmarc",
+                "Missing DMARC policy",
+                "medium",
+                "No DMARC policy detected.",
+                "Add a DMARC TXT record to enforce email policy.",
+            )
+        )
+
+    if not records.get("caa"):
+        findings.append(
+            _finding(
+                "missing_caa",
+                "Missing CAA record",
+                "low",
+                "No CAA record detected.",
+                "Add a CAA record to restrict certificate issuers.",
+            )
+        )
+
+    if not records.get("dnssec"):
+        findings.append(
+            _finding(
+                "dnssec_not_detected",
+                "DNSSEC not detected",
+                "info",
+                "No DS record detected.",
+                "Enable DNSSEC if supported by your registrar.",
+            )
+        )
+
+    findings.append(
+        _finding(
+            "dkim_not_checked",
+            "DKIM selector not checked",
+            "info",
+            "DKIM requires a selector; not checked in MVP.",
+            "Provide a selector-specific DKIM check if needed.",
+        )
+    )
+
+    return findings
+
+
+def scan(target: str) -> ScanResult:
+    start = perf_counter()
+    normalized_url, hostname, _ = normalize_url(target)
+    validate_public_target(hostname)
+
+    findings: List[ScanFinding] = []
+
+    timeout = httpx.Timeout(REQUEST_TIMEOUT, connect=5.0)
+    limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+
+    with httpx.Client(
+        headers={"User-Agent": USER_AGENT},
+        follow_redirects=True,
+        timeout=timeout,
+        limits=limits,
+    ) as client:
+        last_error: Optional[Exception] = None
+        for attempt in range(RETRY_COUNT + 1):
+            try:
+                response = client.get(normalized_url)
+                break
+            except httpx.HTTPError as exc:
+                last_error = exc
+                if attempt >= RETRY_COUNT:
+                    raise
+                time.sleep(0.2 * (attempt + 1))
+        else:
+            if last_error:
+                raise last_error
+
+    set_cookies = response.headers.get_list("set-cookie")
+    headers = {key.lower(): value for key, value in response.headers.items()}
+    is_https = response.url.scheme == "https"
+    findings.extend(_check_headers(headers, set_cookies, is_https))
+
+    redirect_schemes = [item.url.scheme for item in response.history]
+    redirect_schemes.append(response.url.scheme)
+    findings.extend(_redirect_findings(redirect_schemes))
+
+    tls_data = None
+    if response.url.scheme == "https":
+        tls_data, tls_findings = _tls_info(hostname)
+        findings.extend(tls_findings)
+
+    dns_data = _dns_records(hostname)
+    findings.extend(_dns_findings(hostname, dns_data))
+
+    if response.status_code >= 400:
+        findings.append(
+            _finding(
+                "http_error",
+                "HTTP error status",
+                "medium",
+                f"Server returned HTTP {response.status_code}.",
+                "Ensure the URL is reachable and responds with 2xx/3xx.",
+            )
+        )
+
+    if normalized_url.startswith("http://") and response.url.scheme != "https":
+        findings.append(
+            _finding(
+                "http_not_upgraded",
+                "HTTP not upgraded to HTTPS",
+                "medium",
+                "HTTP request did not redirect to HTTPS.",
+                "Redirect HTTP to HTTPS and enable HSTS.",
+            )
+        )
+
+    score, grade = score_from_findings(findings)
+    elapsed = int((perf_counter() - start) * 1000)
+
+    return ScanResult(
+        target=normalized_url,
+        final_url=str(response.url),
+        status_code=response.status_code,
+        score=score,
+        grade=grade,
+        findings=findings,
+        headers=headers,
+        tls=tls_data,
+        dns=dns_data,
+        timing_ms=elapsed,
+    )
+
+
+def safe_scan(target: str) -> Tuple[Optional[ScanResult], Optional[str]]:
+    try:
+        return scan(target), None
+    except TargetValidationError as exc:
+        return None, str(exc)
+    except httpx.HTTPError as exc:
+        return None, f"HTTP error: {exc}"
+    except Exception as exc:
+        return None, f"Unexpected error: {exc}"

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>anxextor - Web Security Scanner</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <p class="badge">anxextor</p>
+        <div class="toolbar">
+          <button id="theme-toggle" class="btn-3d" type="button">Light mode</button>
+        </div>
+        <h1>Web security scanner MVP</h1>
+        <p class="sub">
+          Scan headers, TLS, and DNS posture in seconds. Get a score and
+          actionable fixes.
+        </p>
+        <form id="scan-form" class="scan-form">
+          <input
+            id="target-input"
+            type="text"
+            placeholder="example.com or https://example.com"
+            required
+          />
+          <input
+            id="api-key-input"
+            type="password"
+            placeholder="API key (optional)"
+            autocomplete="off"
+          />
+          <button type="submit">Scan now</button>
+        </form>
+        <p id="status" class="status"></p>
+      </header>
+
+      <section class="results" id="results" hidden>
+        <div class="score-card">
+          <div>
+            <h2>Security score</h2>
+            <p id="score" class="score">--</p>
+            <div class="score-bar">
+              <div id="score-fill" class="score-fill"></div>
+            </div>
+          </div>
+          <div>
+            <p class="label">Grade</p>
+            <p id="grade" class="grade">--</p>
+            <p id="timing" class="timing">--</p>
+          </div>
+        </div>
+
+        <div class="summary">
+          <div class="chip high">High: <span id="high-count">0</span></div>
+          <div class="chip medium">Medium: <span id="medium-count">0</span></div>
+          <div class="chip low">Low: <span id="low-count">0</span></div>
+          <div class="chip info">Info: <span id="info-count">0</span></div>
+        </div>
+
+        <div class="actions">
+          <button id="copy-json" type="button">Copy JSON</button>
+          <button id="download-json" type="button">Download JSON</button>
+          <button id="download-csv" type="button">Download CSV</button>
+          <button id="download-pdf" type="button">Export PDF</button>
+        </div>
+
+        <div class="grid">
+          <div class="panel">
+            <h3>Findings</h3>
+            <ul id="findings" class="list"></ul>
+          </div>
+          <div class="panel">
+            <h3>TLS</h3>
+            <div id="tls" class="kv"></div>
+          </div>
+          <div class="panel">
+            <h3>DNS</h3>
+            <div id="dns" class="kv"></div>
+          </div>
+          <div class="panel">
+            <h3>Remediation</h3>
+            <ol id="remediation" class="remediation"></ol>
+          </div>
+          <div class="panel">
+            <h3>Recent scans</h3>
+            <ul id="history" class="history"></ul>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
