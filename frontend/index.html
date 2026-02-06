@@ -13,25 +13,29 @@
         <div class="toolbar">
           <button id="theme-toggle" class="btn-3d" type="button">Light mode</button>
         </div>
-        <h1>Web security scanner MVP</h1>
+        <h1>Web security scanner</h1>
         <p class="sub">
           Scan headers, TLS, and DNS posture in seconds. Get a score and
           actionable fixes.
         </p>
         <form id="scan-form" class="scan-form">
-          <input
-            id="target-input"
-            type="text"
-            placeholder="example.com or https://example.com"
-            required
-          />
-          <input
-            id="api-key-input"
-            type="password"
-            placeholder="API key (optional)"
-            autocomplete="off"
-          />
-          <button type="submit">Scan now</button>
+          <div id="target-list" class="target-list">
+            <div class="target-row">
+              <input
+                class="target-input"
+                type="text"
+                placeholder="example.com or https://example.com"
+                required
+              />
+              <button class="remove-target btn-3d" type="button" hidden>
+                Remove
+              </button>
+            </div>
+          </div>
+          <div class="scan-actions">
+            <button id="add-target" class="btn-3d" type="button">Add target</button>
+            <button class="btn-3d" type="submit">Scan now</button>
+          </div>
         </form>
         <p id="status" class="status"></p>
       </header>
@@ -87,9 +91,17 @@
             <h3>Recent scans</h3>
             <ul id="history" class="history"></ul>
           </div>
+          <div class="panel">
+            <h3>Batch results</h3>
+            <ul id="batch-results" class="history"></ul>
+          </div>
         </div>
       </section>
     </main>
+    <footer class="footer">
+      <p>Copyright sebastine <span id="year"></span></p>
+    </footer>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.10/dist/purify.min.js"></script>
     <script src="/static/app.js"></script>
   </body>
 </html>

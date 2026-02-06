@@ -19,13 +19,24 @@ const csvBtn = document.getElementById("download-csv");
 const pdfBtn = document.getElementById("download-pdf");
 const remediationEl = document.getElementById("remediation");
 const themeToggle = document.getElementById("theme-toggle");
+const targetListEl = document.getElementById("target-list");
+const addTargetBtn = document.getElementById("add-target");
+const batchResultsEl = document.getElementById("batch-results");
 
-const HISTORY_KEY = "anxextor.history";
 const THEME_KEY = "anxextor.theme";
 let lastResult = null;
+let lastBatch = [];
+const historyEntries = [];
 
-const sanitizeText = (value) =>
-  String(value ?? "").replace(/[<>]/g, "").trim();
+const sanitizeText = (value) => {
+  if (typeof DOMPurify !== "undefined") {
+    return DOMPurify.sanitize(String(value ?? ""), {
+      ALLOWED_TAGS: [],
+      ALLOWED_ATTR: [],
+    }).trim();
+  }
+  return String(value ?? "").replace(/[<>]/g, "").trim();
+};
 
 const sanitizeFinding = (finding) => ({
   id: sanitizeText(finding.id),
@@ -57,8 +68,8 @@ const renderKeyValue = (target, data) => {
     const label = document.createElement("span");
     const val = document.createElement("span");
 
-    label.textContent = `${key}: `;
-    val.textContent = value ?? "n/a";
+    label.textContent = `${sanitizeText(key)}: `;
+    val.textContent = sanitizeText(value ?? "n/a");
 
     row.appendChild(label);
     row.appendChild(val);
@@ -74,10 +85,10 @@ const renderFindings = (items) => {
     const description = document.createElement("small");
     const recommendation = document.createElement("em");
 
-    li.classList.add(finding.severity);
-    title.textContent = finding.title;
-    description.textContent = finding.description;
-    recommendation.textContent = finding.recommendation;
+    li.classList.add(sanitizeText(finding.severity));
+    title.textContent = sanitizeText(finding.title);
+    description.textContent = sanitizeText(finding.description);
+    recommendation.textContent = sanitizeText(finding.recommendation);
 
     li.appendChild(title);
     li.appendChild(document.createElement("br"));
@@ -92,8 +103,9 @@ const renderFindings = (items) => {
 const renderSummary = (findings) => {
   const counts = { high: 0, medium: 0, low: 0, info: 0 };
   findings.forEach((finding) => {
-    if (counts[finding.severity] !== undefined) {
-      counts[finding.severity] += 1;
+    const severity = sanitizeText(finding.severity);
+    if (counts[severity] !== undefined) {
+      counts[severity] += 1;
     }
   });
 
@@ -107,12 +119,13 @@ const renderRemediation = (findings) => {
   remediationEl.innerHTML = "";
   const seen = new Set();
   findings.forEach((finding) => {
-    if (!finding.recommendation || seen.has(finding.recommendation)) {
+    const recommendation = sanitizeText(finding.recommendation);
+    if (!recommendation || seen.has(recommendation)) {
       return;
     }
-    seen.add(finding.recommendation);
+    seen.add(recommendation);
     const li = document.createElement("li");
-    li.textContent = finding.recommendation;
+    li.textContent = recommendation;
     remediationEl.appendChild(li);
   });
   if (!remediationEl.children.length) {
@@ -123,23 +136,16 @@ const renderRemediation = (findings) => {
 };
 
 const renderHistory = () => {
-  const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
   historyEl.innerHTML = "";
-  history.forEach((entry) => {
+  historyEntries.forEach((entry) => {
     const li = document.createElement("li");
-    const title = document.createElement("strong");
-    const meta = document.createElement("span");
 
     const host = sanitizeText(entry.host);
     const timestamp = sanitizeText(entry.timestamp);
 
-    title.textContent = host;
-    meta.textContent = timestamp;
-
-    li.appendChild(title);
-    li.appendChild(meta);
+    li.textContent = `${host} (${timestamp})`;
     li.addEventListener("click", () => {
-      const targetInput = document.getElementById("target-input");
+      const targetInput = document.querySelector(".target-input");
       targetInput.value = host;
       form.requestSubmit();
     });
@@ -147,24 +153,37 @@ const renderHistory = () => {
   });
 };
 
+const renderBatchResults = (results) => {
+  batchResultsEl.innerHTML = "";
+  results.forEach((result) => {
+    const safeResult = sanitizeResult(result);
+    const li = document.createElement("li");
+
+    const grade = sanitizeText(safeResult.grade);
+    const finalUrl = sanitizeText(safeResult.final_url);
+    li.textContent = `${grade} ${safeResult.score} - ${finalUrl} (Findings: ${safeResult.findings.length})`;
+    li.addEventListener("click", () => renderResult(safeResult, false));
+    batchResultsEl.appendChild(li);
+  });
+};
+
 const saveHistory = (data) => {
-  const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
   const safeData = sanitizeResult(data);
   const host = new URL(safeData.final_url).host;
-  history.unshift({
+  historyEntries.unshift({
     host,
     timestamp: new Date().toLocaleString(),
   });
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, 6)));
+  historyEntries.splice(6);
   renderHistory();
 };
 
 const renderResult = (data, save = true) => {
   const safeData = sanitizeResult(data);
   lastResult = safeData;
-  scoreEl.textContent = safeData.score;
-  gradeEl.textContent = safeData.grade;
-  timingEl.textContent = `Completed in ${safeData.timing_ms} ms`;
+  scoreEl.textContent = String(safeData.score);
+  gradeEl.textContent = sanitizeText(safeData.grade);
+  timingEl.textContent = `Completed in ${sanitizeText(safeData.timing_ms)} ms`;
   scoreFillEl.style.width = `${safeData.score}%`;
 
   renderFindings(safeData.findings);
@@ -174,12 +193,48 @@ const renderResult = (data, save = true) => {
   renderKeyValue(dnsEl, safeData.dns || {});
 
   resultsSection.hidden = false;
-  statusEl.textContent = `Scan complete for ${safeData.final_url}`;
+  statusEl.textContent = `Scan complete for ${sanitizeText(safeData.final_url)}`;
 
   if (save) {
     saveHistory(safeData);
   }
 };
+
+const addTargetRow = (value = "") => {
+  const row = document.createElement("div");
+  row.className = "target-row";
+
+  const input = document.createElement("input");
+  input.className = "target-input";
+  input.type = "text";
+  input.placeholder = "example.com or https://example.com";
+  input.value = value;
+  input.required = true;
+
+  const removeBtn = document.createElement("button");
+  removeBtn.className = "remove-target btn-3d";
+  removeBtn.type = "button";
+  removeBtn.textContent = "Remove";
+  removeBtn.addEventListener("click", () => {
+    row.remove();
+    updateRemoveButtons();
+  });
+
+  row.appendChild(input);
+  row.appendChild(removeBtn);
+  targetListEl.appendChild(row);
+  updateRemoveButtons();
+};
+
+const updateRemoveButtons = () => {
+  const rows = targetListEl.querySelectorAll(".target-row");
+  rows.forEach((row, index) => {
+    const removeBtn = row.querySelector(".remove-target");
+    removeBtn.hidden = rows.length === 1;
+  });
+};
+
+addTargetBtn.addEventListener("click", () => addTargetRow());
 
 copyBtn.addEventListener("click", async () => {
   if (!lastResult) {
@@ -189,7 +244,7 @@ copyBtn.addEventListener("click", async () => {
     await navigator.clipboard.writeText(JSON.stringify(lastResult, null, 2));
     statusEl.textContent = "JSON copied to clipboard.";
   } catch (error) {
-    statusEl.textContent = "Copy failed."
+    statusEl.textContent = "Copy failed.";
   }
 });
 
@@ -217,11 +272,11 @@ csvBtn.addEventListener("click", () => {
   const rows = [
     ["id", "title", "severity", "description", "recommendation"],
     ...lastResult.findings.map((finding) => [
-      finding.id,
-      finding.title,
-      finding.severity,
-      finding.description,
-      finding.recommendation,
+      sanitizeText(finding.id),
+      sanitizeText(finding.title),
+      sanitizeText(finding.severity),
+      sanitizeText(finding.description),
+      sanitizeText(finding.recommendation),
     ]),
   ];
 
@@ -248,6 +303,7 @@ pdfBtn.addEventListener("click", () => {
   if (!lastResult) {
     return;
   }
+  const safeResult = sanitizeResult(lastResult);
   const printWindow = window.open("", "_blank");
   if (!printWindow) {
     statusEl.textContent = "Popup blocked. Allow popups to export PDF.";
@@ -263,7 +319,7 @@ pdfBtn.addEventListener("click", () => {
   body.appendChild(heading);
 
   const meta = doc.createElement("p");
-  meta.textContent = `Target: ${lastResult.final_url} | Score: ${lastResult.score} | Grade: ${lastResult.grade}`;
+  meta.textContent = `Target: ${sanitizeText(safeResult.final_url)} | Score: ${safeResult.score} | Grade: ${sanitizeText(safeResult.grade)}`;
   body.appendChild(meta);
 
   const listTitle = doc.createElement("h2");
@@ -271,9 +327,12 @@ pdfBtn.addEventListener("click", () => {
   body.appendChild(listTitle);
 
   const list = doc.createElement("ol");
-  lastResult.findings.forEach((finding) => {
+  safeResult.findings.forEach((finding) => {
     const li = doc.createElement("li");
-    li.textContent = `${finding.severity.toUpperCase()}: ${finding.title} - ${finding.recommendation}`;
+    const severity = sanitizeText(finding.severity).toUpperCase();
+    const title = sanitizeText(finding.title);
+    const rec = sanitizeText(finding.recommendation);
+    li.textContent = `${severity}: ${title} - ${rec}`;
     list.appendChild(li);
   });
   body.appendChild(list);
@@ -285,7 +344,7 @@ pdfBtn.addEventListener("click", () => {
   const remList = doc.createElement("ol");
   remediationEl.childNodes.forEach((node) => {
     const li = doc.createElement("li");
-    li.textContent = node.textContent || "";
+    li.textContent = sanitizeText(node.textContent || "");
     remList.appendChild(li);
   });
   body.appendChild(remList);
@@ -311,31 +370,49 @@ form.addEventListener("submit", async (event) => {
   statusEl.textContent = "Scanning...";
   resultsSection.hidden = true;
 
-  const url = document.getElementById("target-input").value;
-  const apiKey = document.getElementById("api-key-input").value;
+  const targets = Array.from(document.querySelectorAll(".target-input"))
+    .map((input) => input.value.trim())
+    .filter(Boolean);
+  const url = targets[0] || "";
   try {
     const headers = { "Content-Type": "application/json" };
-    if (apiKey) {
-      headers["X-API-Key"] = apiKey;
-    }
 
-    const response = await fetch("/api/scan", {
+    const endpoint = targets.length > 1 ? "/api/scan/batch" : "/api/scan";
+    const payload = targets.length > 1 ? { targets } : { url };
+
+    const response = await fetch(endpoint, {
       method: "POST",
       headers,
-      body: JSON.stringify({ url }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || "Scan failed");
+      throw new Error(sanitizeText(error.detail || "Scan failed"));
     }
 
     const data = await response.json();
-    renderResult(data, true);
+    if (targets.length > 1) {
+      lastBatch = (data.results || []).map((result) => sanitizeResult(result));
+      renderBatchResults(lastBatch);
+      if (lastBatch.length) {
+        renderResult(lastBatch[0], true);
+      }
+      if (data.errors && data.errors.length) {
+        statusEl.textContent = `Batch completed with ${data.errors.length} errors.`;
+      }
+    } else {
+      renderResult(data, true);
+    }
   } catch (error) {
-    statusEl.textContent = error.message;
+    statusEl.textContent = sanitizeText(error.message);
   }
 });
 
 renderHistory();
 setTheme(localStorage.getItem(THEME_KEY) || "dark");
+updateRemoveButtons();
+const yearEl = document.getElementById("year");
+if (yearEl) {
+  yearEl.textContent = String(new Date().getFullYear());
+}

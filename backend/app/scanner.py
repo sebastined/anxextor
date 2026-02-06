@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import socket
 import ssl
 import time
 from datetime import datetime, timezone
@@ -7,6 +8,7 @@ from time import perf_counter
 from typing import Dict, List, Optional, Tuple
 
 import dns.resolver
+import uuid
 import httpx
 
 from .config import settings
@@ -400,14 +402,11 @@ def _tls_info(hostname: str) -> Tuple[Optional[Dict[str, str]], List[ScanFinding
     findings: List[ScanFinding] = []
     try:
         context = ssl.create_default_context()
-        with context.wrap_socket(
-            ssl.SSLSocket(),
-            server_hostname=hostname,
-        ) as sock:
-            sock.connect((hostname, 443))
-            cert = sock.getpeercert()
-            protocol = sock.version() or "unknown"
-            cipher = sock.cipher()[0] if sock.cipher() else "unknown"
+        with socket.create_connection((hostname, 443), timeout=REQUEST_TIMEOUT) as raw:
+            with context.wrap_socket(raw, server_hostname=hostname) as sock:
+                cert = sock.getpeercert()
+                protocol = sock.version() or "unknown"
+                cipher = sock.cipher()[0] if sock.cipher() else "unknown"
 
         not_after = cert.get("notAfter")
         expiry_days = None
@@ -495,6 +494,26 @@ def _dns_records(domain: str) -> Dict[str, bool]:
     }
 
 
+def _wildcard_dns_findings(domain: str) -> List[ScanFinding]:
+    findings: List[ScanFinding] = []
+    random_label = uuid.uuid4().hex[:12]
+    test_host = f"{random_label}.{domain}"
+    try:
+        dns.resolver.resolve(test_host, "A")
+        findings.append(
+            _finding(
+                "wildcard_dns_detected",
+                "Wildcard DNS detected",
+                "info",
+                "Random subdomain resolved, indicating wildcard DNS.",
+                "Ensure wildcard DNS is intended and protected by access controls.",
+            )
+        )
+    except Exception:
+        return findings
+    return findings
+
+
 def _dns_findings(domain: str, records: Dict[str, bool]) -> List[ScanFinding]:
     findings: List[ScanFinding] = []
 
@@ -557,7 +576,10 @@ def _dns_findings(domain: str, records: Dict[str, bool]) -> List[ScanFinding]:
 
 def scan(target: str) -> ScanResult:
     start = perf_counter()
-    normalized_url, hostname, _ = normalize_url(target)
+    normalized_url, hostname, _, wildcard_base = normalize_url(target)
+    if wildcard_base:
+        normalized_url = normalized_url.replace(hostname, wildcard_base, 1)
+        hostname = wildcard_base
     validate_public_target(hostname)
 
     findings: List[ScanFinding] = []
@@ -601,6 +623,8 @@ def scan(target: str) -> ScanResult:
 
     dns_data = _dns_records(hostname)
     findings.extend(_dns_findings(hostname, dns_data))
+    if wildcard_base:
+        findings.extend(_wildcard_dns_findings(hostname))
 
     if response.status_code >= 400:
         findings.append(

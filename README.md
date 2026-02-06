@@ -73,7 +73,6 @@ The Jenkins pipeline is defined in Jenkinsfile and runs on a Kubernetes agent.
 
 The UI is a single static page served from the backend.
 
-- Optional API key input (sent as X-API-Key header).
 - Score bar visual and grade display.
 - Findings list with severity styling.
 - Summary chips for High/Medium/Low/Info counts.
@@ -90,6 +89,8 @@ The UI is a single static page served from the backend.
 3. Fetch the target with httpx (follow redirects, retry on transient failures).
 4. Analyze headers, cookies, redirect chain, TLS, and DNS records.
 5. Compute a score and grade based on findings.
+
+Wildcard targets like `*.abc.xyz` are accepted by scanning the base domain (`abc.xyz`) and checking for wildcard DNS.
 
 ### Header checks
 
@@ -143,6 +144,18 @@ The /api/scan endpoint supports optional API key auth and a simple in-memory rat
 - Rate limit defaults to 30 requests per minute per client IP.
 - Rate limiting is in-memory and resets on process restart.
 
+Planned: user authentication via Google and GitHub OAuth, with API keys bound to user accounts (no manual input in the UI).
+
+## Reporting and history
+
+Planned: authenticated users will see scan history and can generate a detailed professional report.
+
+The detailed report will include:
+
+- Executive summary for non-technical stakeholders.
+- Technical findings with remediation guidance.
+- Compliance-oriented mapping and risk notes for audit teams.
+
 ## Configuration
 
 All configuration uses environment variables.
@@ -152,6 +165,7 @@ All configuration uses environment variables.
 - ANXEXTOR_HTTP_TIMEOUT_SECONDS: HTTP timeout for target fetch (default 10.0).
 - ANXEXTOR_HTTP_RETRIES: Retry count for transient HTTP errors (default 2).
 - ANXEXTOR_LOG_LEVEL: Logging level (default INFO).
+- ANXEXTOR_BATCH_MAX_TARGETS: Max targets per batch request (default 5).
 
 ## Scoring
 
@@ -240,6 +254,43 @@ Error responses:
 ### OpenAPI docs
 
 When running locally, browse to /docs for interactive API docs.
+
+### POST /api/scan/batch
+
+Request body:
+
+```json
+{
+  "targets": ["https://example.com", "*.abc.xyz"]
+}
+```
+
+Success response (200):
+
+```json
+{
+  "results": [
+    {
+      "target": "https://example.com",
+      "final_url": "https://example.com/",
+      "status_code": 200,
+      "score": 85,
+      "grade": "B",
+      "findings": [],
+      "headers": {},
+      "tls": null,
+      "dns": {},
+      "timing_ms": 400
+    }
+  ],
+  "errors": [
+    {
+      "target": "*.abc.xyz",
+      "error": "Hostname did not resolve to any IPs."
+    }
+  ]
+}
+```
 
 ## Local setup
 

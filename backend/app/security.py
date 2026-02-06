@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import socket
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 from urllib.parse import urlparse
 
 
@@ -10,7 +10,7 @@ class TargetValidationError(ValueError):
     pass
 
 
-def normalize_url(target: str) -> Tuple[str, str, str]:
+def normalize_url(target: str) -> Tuple[str, str, str, Optional[str]]:
     target = target.strip()
     if not target:
         raise TargetValidationError("URL is required.")
@@ -25,7 +25,14 @@ def normalize_url(target: str) -> Tuple[str, str, str]:
     if not parsed.hostname:
         raise TargetValidationError("URL must include a hostname.")
 
-    return target, parsed.hostname, parsed.scheme
+    hostname = parsed.hostname
+    wildcard_base = None
+    if hostname.startswith("*."):
+        wildcard_base = hostname[2:]
+        if not wildcard_base:
+            raise TargetValidationError("Wildcard hostname is invalid.")
+
+    return target, hostname, parsed.scheme, wildcard_base
 
 
 def resolve_ips(hostname: str) -> List[str]:

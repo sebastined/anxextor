@@ -12,6 +12,7 @@ class Settings:
     http_timeout_seconds: float
     http_retries: int
     log_level: str
+    batch_max_targets: int
 
 
 def _get_int(name: str, default: int) -> int:
@@ -40,4 +41,5 @@ settings = Settings(
     http_timeout_seconds=_get_float("ANXEXTOR_HTTP_TIMEOUT_SECONDS", 10.0),
     http_retries=_get_int("ANXEXTOR_HTTP_RETRIES", 2),
     log_level=os.getenv("ANXEXTOR_LOG_LEVEL", "INFO"),
+    batch_max_targets=_get_int("ANXEXTOR_BATCH_MAX_TARGETS", 5),
 )

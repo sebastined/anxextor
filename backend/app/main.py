@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .models import ScanRequest, ScanResult
+from .models import BatchScanRequest, BatchScanResult, ScanRequest, ScanResult
 from .scanner import safe_scan
 from .auth import require_api_key
 from .rate_limit import RateLimiter
@@ -85,3 +85,36 @@ async def scan_endpoint(payload: ScanRequest, request: Request) -> ScanResult:
     if error:
         raise HTTPException(status_code=400, detail=error)
     return result
+
+
+@app.post(
+    "/api/scan/batch",
+    response_model=BatchScanResult,
+    responses={
+        400: {"description": "Bad request"},
+        401: {"description": "Unauthorized"},
+        413: {"description": "Too many targets"},
+        429: {"description": "Too many requests"},
+    },
+)
+async def scan_batch_endpoint(payload: BatchScanRequest, request: Request) -> BatchScanResult:
+    require_api_key(request)
+    limiter.check(request)
+
+    if len(payload.targets) > settings.batch_max_targets:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Too many targets. Max {settings.batch_max_targets}.",
+        )
+
+    results = []
+    errors = []
+
+    for target in payload.targets:
+        result, error = safe_scan(target)
+        if error:
+            errors.append({"target": target, "error": error})
+        elif result:
+            results.append(result)
+
+    return BatchScanResult(results=results, errors=errors)

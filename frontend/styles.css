@@ -48,6 +48,13 @@ body {
   margin: 0 auto;
 }
 
+.footer {
+  text-align: center;
+  padding: 24px 16px 40px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
 .hero {
   text-align: center;
   margin-bottom: 40px;
@@ -89,6 +96,32 @@ h1 {
   justify-content: center;
 }
 
+.target-list {
+  display: grid;
+  gap: 10px;
+  width: min(760px, 95vw);
+}
+
+.target-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.target-row .target-input {
+  min-width: min(420px, 85vw);
+}
+
+.remove-target {
+  background: #fef3c7;
+  color: #1f2937;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
 .scan-form input {
   min-width: min(420px, 85vw);
   padding: 12px 16px;
@@ -98,8 +131,11 @@ h1 {
   color: var(--text);
 }
 
-#api-key-input {
-  min-width: min(240px, 65vw);
+.scan-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .scan-form button {

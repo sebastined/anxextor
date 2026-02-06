@@ -11,6 +11,12 @@ class ScanRequest(BaseModel):
     )
 
 
+class BatchScanRequest(BaseModel):
+    targets: List[str] = Field(
+        ..., description="List of target URLs or hostnames", min_length=1
+    )
+
+
 class ScanFinding(BaseModel):
     id: str
     title: str
@@ -61,3 +67,13 @@ class ScanResult(BaseModel):
             ]
         }
     }
+
+
+class BatchScanError(BaseModel):
+    target: str
+    error: str
+
+
+class BatchScanResult(BaseModel):
+    results: List[ScanResult]
+    errors: List[BatchScanError]
