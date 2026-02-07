@@ -1,9 +1,7 @@
 ---
-alwaysApply: true
-always_on: true
-trigger: always_on
-applyTo: "**"
+name: Snyk Security At Inception
 description: Snyk Security At Inception
+applyTo: "**"
 ---
 
 # Project security best practices

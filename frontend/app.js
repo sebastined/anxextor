@@ -252,16 +252,20 @@ downloadBtn.addEventListener("click", () => {
   if (!lastResult) {
     return;
   }
-  const blob = new Blob([JSON.stringify(lastResult, null, 2)], {
+  const safeResult = sanitizeResult(lastResult);
+  const blob = new Blob([JSON.stringify(safeResult, null, 2)], {
     type: "application/json",
   });
   const url = URL.createObjectURL(blob);
+  const safeUrl = sanitizeText(url);
+  if (!safeUrl.startsWith("blob:")) {
+    URL.revokeObjectURL(url);
+    return;
+  }
   const link = document.createElement("a");
-  link.href = url;
+  link.href = safeUrl;
   link.download = "scan-result.json";
-  document.body.appendChild(link);
   link.click();
-  link.remove();
   URL.revokeObjectURL(url);
 });
 
@@ -269,9 +273,10 @@ csvBtn.addEventListener("click", () => {
   if (!lastResult) {
     return;
   }
+  const safeResult = sanitizeResult(lastResult);
   const rows = [
     ["id", "title", "severity", "description", "recommendation"],
-    ...lastResult.findings.map((finding) => [
+    ...safeResult.findings.map((finding) => [
       sanitizeText(finding.id),
       sanitizeText(finding.title),
       sanitizeText(finding.severity),
@@ -290,12 +295,15 @@ csvBtn.addEventListener("click", () => {
 
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
+  const safeUrl = sanitizeText(url);
+  if (!safeUrl.startsWith("blob:")) {
+    URL.revokeObjectURL(url);
+    return;
+  }
   const link = document.createElement("a");
-  link.href = url;
+  link.href = safeUrl;
   link.download = "scan-findings.csv";
-  document.body.appendChild(link);
   link.click();
-  link.remove();
   URL.revokeObjectURL(url);
 });
 

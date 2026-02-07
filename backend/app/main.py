@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -24,6 +24,43 @@ logging.basicConfig(level=log_level)
 app = FastAPI(title="anxextor", version="0.1.0")
 logger = logging.getLogger("anxextor")
 limiter = RateLimiter(limit_per_minute=settings.rate_limit_per_minute)
+
+DEFAULT_CSP = " ".join(
+    [
+        "default-src 'self';",
+        "base-uri 'self';",
+        "object-src 'none';",
+        "frame-ancestors 'none';",
+        "script-src 'self' https://cdn.jsdelivr.net;",
+        "style-src 'self' https://fonts.googleapis.com;",
+        "font-src 'self' https://fonts.gstatic.com;",
+        "img-src 'self' data:;",
+        "connect-src 'self';",
+    ]
+)
+DEFAULT_PERMISSIONS_POLICY = (
+    "accelerometer=(), autoplay=(), camera=(), geolocation=(), "
+    "gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), "
+    "usb=(), fullscreen=(self)"
+)
+
+
+def _apply_security_headers(response: Response, is_https: bool) -> None:
+    response.headers.setdefault("Content-Security-Policy", DEFAULT_CSP)
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", DEFAULT_PERMISSIONS_POLICY)
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    response.headers.setdefault("Cross-Origin-Embedder-Policy", "unsafe-none")
+    response.headers.setdefault("Cache-Control", "no-store")
+
+    if is_https:
+        response.headers.setdefault(
+            "Strict-Transport-Security",
+            "max-age=31536000; includeSubDomains; preload",
+        )
+
 
 if FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
@@ -45,6 +82,9 @@ async def add_request_context(request: Request, call_next):
     duration_ms = int((time.monotonic() - start_time) * 1000)
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Response-Time-ms"] = str(duration_ms)
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").lower()
+    is_https = request.url.scheme == "https" or forwarded_proto == "https"
+    _apply_security_headers(response, is_https)
     logger.info(
         "Request completed",
         extra={

@@ -67,6 +67,37 @@ Each finding subtracts from 100:
 
 Grades: A (90-100), B (80-89), C (70-79), D (60-69), F (<60).
 
+## Remediation tips
+
+Use this as an operator checklist when findings appear.
+
+Headers:
+- Add strict security headers at the app edge or reverse proxy. Defaults are set in the FastAPI middleware.
+- CSP: keep `frame-ancestors 'none'` unless you need embeds; explicitly allow trusted script/style/font origins.
+- HSTS: enable on HTTPS only, use `max-age=31536000; includeSubDomains; preload` if you are ready.
+- X-Frame-Options: `DENY` (or `SAMEORIGIN` if you must embed).
+- X-Content-Type-Options: `nosniff`.
+- Referrer-Policy: `strict-origin-when-cross-origin` or `no-referrer`.
+- Permissions-Policy: start with deny-all and open only what you need.
+- COOP/COEP: set `Cross-Origin-Opener-Policy: same-origin`; only set `Cross-Origin-Embedder-Policy: require-corp` if you need cross-origin isolation.
+- Cache-Control: `no-store` for dynamic responses; use `private, max-age=0` for user-specific content.
+
+Server header:
+- Remove or minimize at the CDN or reverse proxy (Cloudflare, Nginx, etc.). App code usually cannot strip it reliably.
+
+DNS:
+- SPF: add a TXT record at apex like `v=spf1 include:_spf.yourmailprovider.com -all`.
+- DMARC: add `TXT _dmarc` with `v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain`.
+- CAA: add `CAA 0 issue "letsencrypt.org"` (or your CA).
+- DNSSEC: enable at your registrar and publish DS records.
+- DKIM: add provider-specific selector TXT records (scanner does not check without selector).
+
+TLS:
+- Use TLS 1.2+ only, rotate certs before 14 days to avoid "expiring soon".
+
+Redirects:
+- Reduce redirect hops, and never downgrade HTTPS to HTTP.
+
 ## API reference
 
 ### POST /api/scan
