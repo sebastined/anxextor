@@ -35,11 +35,19 @@ def _get_float(name: str, default: float) -> float:
         return default
 
 
+def _get_log_level(name: str, default: str) -> str:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    value = raw.strip().upper()
+    return value if value else default
+
+
 settings = Settings(
     api_key=os.getenv("ANXEXTOR_API_KEY"),
     rate_limit_per_minute=_get_int("ANXEXTOR_RATE_LIMIT_PER_MINUTE", 30),
     http_timeout_seconds=_get_float("ANXEXTOR_HTTP_TIMEOUT_SECONDS", 10.0),
     http_retries=_get_int("ANXEXTOR_HTTP_RETRIES", 2),
-    log_level=os.getenv("ANXEXTOR_LOG_LEVEL", "INFO"),
+    log_level=_get_log_level("ANXEXTOR_LOG_LEVEL", "INFO"),
     batch_max_targets=_get_int("ANXEXTOR_BATCH_MAX_TARGETS", 5),
 )
