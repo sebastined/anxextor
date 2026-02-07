@@ -8,7 +8,6 @@ from typing import Any, Dict, Optional
 
 import httpx
 from cryptography.fernet import Fernet
-from supabase import Client, create_client
 
 from .config import settings
 
@@ -51,10 +50,20 @@ class VisitorSnapshot:
         }
 
 
-def _get_supabase() -> Optional[Client]:
+def _get_rest_base() -> Optional[str]:
     if not settings.supabase_url or not settings.supabase_service_key:
         return None
-    return create_client(settings.supabase_url, settings.supabase_service_key)
+    return f"{settings.supabase_url.rstrip('/')}/rest/v1"
+
+
+def _get_rest_headers() -> Optional[Dict[str, str]]:
+    if not settings.supabase_service_key:
+        return None
+    return {
+        "apikey": settings.supabase_service_key,
+        "authorization": f"Bearer {settings.supabase_service_key}",
+        "content-type": "application/json",
+    }
 
 
 def _get_fernet() -> Optional[Fernet]:
@@ -105,27 +114,41 @@ def _privacy_flag(data: Dict[str, Any]) -> Optional[bool]:
 
 
 def _count_events(
-    client: Client,
+    rest_base: str,
+    headers: Dict[str, str],
     fingerprint_id: str,
     event_type: str,
     since: datetime,
 ) -> int:
-    response = (
-        client.table("visitor_events")
-        .select("id", count="exact")
-        .eq("fingerprint_id", fingerprint_id)
-        .eq("event_type", event_type)
-        .gte("created_at", since.isoformat())
-        .execute()
-    )
-    count = getattr(response, "count", None)
-    return int(count or 0)
+    params = {
+        "select": "id",
+        "fingerprint_id": f"eq.{fingerprint_id}",
+        "event_type": f"eq.{event_type}",
+        "created_at": f"gte.{since.isoformat()}",
+    }
+    try:
+        response = httpx.get(
+            f"{rest_base}/visitor_events",
+            params=params,
+            headers={**headers, "prefer": "count=exact"},
+            timeout=5.0,
+        )
+    except Exception:
+        logger.exception("Failed to count events")
+        return 0
+
+    content_range = response.headers.get("content-range") or ""
+    if "/" in content_range:
+        total = content_range.split("/")[-1]
+        if total.isdigit():
+            return int(total)
+    return 0
 
 
-def _window_counts(client: Client, fingerprint_id: str) -> Dict[str, int]:
+def _window_counts(rest_base: str, headers: Dict[str, str], fingerprint_id: str) -> Dict[str, int]:
     now = datetime.now(timezone.utc)
     return {
-        label: _count_events(client, fingerprint_id, "visit", now - delta)
+        label: _count_events(rest_base, headers, fingerprint_id, "visit", now - delta)
         for label, delta in WINDOWS.items()
     }
 
@@ -138,8 +161,9 @@ def track_visit(
     if not settings.visitor_tracking_enabled:
         return None
 
-    client = _get_supabase()
-    if not client:
+    rest_base = _get_rest_base()
+    headers = _get_rest_headers()
+    if not rest_base or not headers:
         return None
 
     now = datetime.now(timezone.utc)
@@ -151,14 +175,25 @@ def track_visit(
     city = ipinfo.get("city")
     behind_proxy = _privacy_flag(ipinfo)
 
-    existing = (
-        client.table("visitor_profiles")
-        .select("visit_count, scan_count")
-        .eq("fingerprint_id", fingerprint_id)
-        .maybe_single()
-        .execute()
-        .data
-    )
+    existing = None
+    try:
+        response = httpx.get(
+            f"{rest_base}/visitor_profiles",
+            params={
+                "select": "visit_count,scan_count",
+                "fingerprint_id": f"eq.{fingerprint_id}",
+                "limit": 1,
+            },
+            headers=headers,
+            timeout=5.0,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            if isinstance(data, list) and data:
+                existing = data[0]
+    except Exception:
+        logger.exception("Failed to read visitor profile")
+
     visit_count = int(existing.get("visit_count", 0)) if existing else 0
     scan_count = int(existing.get("scan_count", 0)) if existing else 0
 
@@ -180,19 +215,32 @@ def track_visit(
         "last_visit_at": now.isoformat(),
     }
 
-    client.table("visitor_profiles").upsert(
-        profile_payload, on_conflict="fingerprint_id"
-    ).execute()
+    try:
+        httpx.post(
+            f"{rest_base}/visitor_profiles",
+            params={"on_conflict": "fingerprint_id"},
+            headers={**headers, "prefer": "resolution=merge-duplicates"},
+            json=profile_payload,
+            timeout=5.0,
+        )
+    except Exception:
+        logger.exception("Failed to upsert visitor profile")
 
-    client.table("visitor_events").insert(
-        {
-            "fingerprint_id": fingerprint_id,
-            "event_type": event_type,
-            "created_at": now.isoformat(),
-        }
-    ).execute()
+    try:
+        httpx.post(
+            f"{rest_base}/visitor_events",
+            headers=headers,
+            json={
+                "fingerprint_id": fingerprint_id,
+                "event_type": event_type,
+                "created_at": now.isoformat(),
+            },
+            timeout=5.0,
+        )
+    except Exception:
+        logger.exception("Failed to insert visitor event")
 
-    visit_windows = _window_counts(client, fingerprint_id)
+    visit_windows = _window_counts(rest_base, headers, fingerprint_id)
 
     return VisitorSnapshot(
         fingerprint_id=fingerprint_id,
