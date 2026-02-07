@@ -22,10 +22,14 @@ const themeToggle = document.getElementById("theme-toggle");
 const targetListEl = document.getElementById("target-list");
 const addTargetBtn = document.getElementById("add-target");
 const batchResultsEl = document.getElementById("batch-results");
+const visitorSection = document.getElementById("visitor");
+const visitorProfileEl = document.getElementById("visitor-profile");
+const visitorWindowsEl = document.getElementById("visitor-windows");
 
 const THEME_KEY = "anxextor.theme";
 let lastResult = null;
 let lastBatch = [];
+let fingerprintId = "";
 const historyEntries = [];
 
 const sanitizeText = (value) => {
@@ -60,6 +64,118 @@ const sanitizeResult = (data) => ({
   dns: data.dns || {},
   timing_ms: Number(data.timing_ms ?? 0),
 });
+
+const loadScript = (src) =>
+  new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load script"));
+    document.head.appendChild(script);
+  });
+
+const fetchConfig = async () => {
+  try {
+    const response = await fetch("/api/config");
+    if (!response.ok) {
+      return null;
+    }
+    return await response.json();
+  } catch (error) {
+    return null;
+  }
+};
+
+const renderVisitor = (snapshot) => {
+  if (!snapshot) {
+    return;
+  }
+  const safeSnapshot = {
+    fingerprint_id: sanitizeText(snapshot.fingerprint_id),
+    ip: sanitizeText(snapshot.ip),
+    country: sanitizeText(snapshot.country || "n/a"),
+    city: sanitizeText(snapshot.city || "n/a"),
+    behind_proxy: sanitizeText(
+      snapshot.behind_proxy === null || snapshot.behind_proxy === undefined
+        ? "n/a"
+        : snapshot.behind_proxy
+        ? "yes"
+        : "no"
+    ),
+    visit_count: sanitizeText(snapshot.visit_count),
+    scan_count: sanitizeText(snapshot.scan_count),
+    last_visit_at: sanitizeText(snapshot.last_visit_at),
+  };
+
+  renderKeyValue(visitorProfileEl, {
+    "Fingerprint ID": safeSnapshot.fingerprint_id,
+    "Source IP": safeSnapshot.ip,
+    Country: safeSnapshot.country,
+    City: safeSnapshot.city,
+    "Proxy/VPN": safeSnapshot.behind_proxy,
+    "Visits": safeSnapshot.visit_count,
+    "Scans": safeSnapshot.scan_count,
+    "Last visit": safeSnapshot.last_visit_at,
+  });
+
+  const windows = snapshot.visit_windows || {};
+  renderKeyValue(visitorWindowsEl, {
+    "5 min": windows["5m"] ?? 0,
+    "30 min": windows["30m"] ?? 0,
+    "1 hour": windows["1h"] ?? 0,
+    "1 day": windows["1d"] ?? 0,
+    "1 week": windows["1w"] ?? 0,
+    "1 month": windows["1mo"] ?? 0,
+    "1 year": windows["1y"] ?? 0,
+  });
+
+  visitorSection.hidden = false;
+};
+
+const initFingerprint = async () => {
+  const config = await fetchConfig();
+  if (!config || !config.visitor_tracking_enabled) {
+    return "";
+  }
+  const publicKey = sanitizeText(config.fingerprint_public_key || "");
+  if (!publicKey) {
+    return "";
+  }
+  try {
+    await loadScript(`https://fpjscdn.net/v3/${encodeURIComponent(publicKey)}`);
+    if (!window.FingerprintJS || typeof window.FingerprintJS.load !== "function") {
+      return "";
+    }
+    const fp = await window.FingerprintJS.load({ token: publicKey });
+    const result = await fp.get();
+    fingerprintId = sanitizeText(result.visitorId || "");
+    return fingerprintId;
+  } catch (error) {
+    return "";
+  }
+};
+
+const registerVisitor = async () => {
+  if (!fingerprintId) {
+    return;
+  }
+  try {
+    const response = await fetch("/api/visitor", {
+      method: "POST",
+      headers: { "X-Fingerprint-ID": fingerprintId },
+    });
+    if (!response.ok) {
+      return;
+    }
+    const data = await response.json();
+    if (data && data.enabled) {
+      renderVisitor(data.snapshot);
+    }
+  } catch (error) {
+    return;
+  }
+};
 
 const renderKeyValue = (target, data) => {
   target.innerHTML = "";
@@ -384,6 +500,9 @@ form.addEventListener("submit", async (event) => {
   const url = targets[0] || "";
   try {
     const headers = { "Content-Type": "application/json" };
+    if (fingerprintId) {
+      headers["X-Fingerprint-ID"] = fingerprintId;
+    }
 
     const endpoint = targets.length > 1 ? "/api/scan/batch" : "/api/scan";
     const payload = targets.length > 1 ? { targets } : { url };
@@ -417,6 +536,12 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
+const bootstrap = async () => {
+  await initFingerprint();
+  await registerVisitor();
+};
+
+bootstrap();
 renderHistory();
 setTheme(localStorage.getItem(THEME_KEY) || "dark");
 updateRemoveButtons();

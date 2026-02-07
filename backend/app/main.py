@@ -4,6 +4,7 @@ import logging
 import time
 from pathlib import Path
 from uuid import uuid4
+import asyncio
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
@@ -14,6 +15,7 @@ from .scanner import safe_scan
 from .auth import require_api_key
 from .rate_limit import RateLimiter
 from .config import settings
+from .visitors import track_visit
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = ROOT_DIR / "frontend"
@@ -31,11 +33,11 @@ DEFAULT_CSP = " ".join(
         "base-uri 'self';",
         "object-src 'none';",
         "frame-ancestors 'none';",
-        "script-src 'self' https://cdn.jsdelivr.net;",
+        "script-src 'self' https://cdn.jsdelivr.net https://fpjscdn.net;",
         "style-src 'self' https://fonts.googleapis.com;",
         "font-src 'self' https://fonts.gstatic.com;",
         "img-src 'self' data:;",
-        "connect-src 'self';",
+        "connect-src 'self' https://api.fpjs.io https://fpjscdn.net;",
     ]
 )
 DEFAULT_PERMISSIONS_POLICY = (
@@ -85,6 +87,17 @@ async def add_request_context(request: Request, call_next):
     forwarded_proto = request.headers.get("x-forwarded-proto", "").lower()
     is_https = request.url.scheme == "https" or forwarded_proto == "https"
     _apply_security_headers(response, is_https)
+
+    fingerprint_id = request.headers.get("x-fingerprint-id", "").strip()
+    client_ip = (
+        request.headers.get("cf-connecting-ip")
+        or request.headers.get("x-real-ip")
+        or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
+        or (request.client.host if request.client else "")
+    )
+    skip_paths = {"/health", "/api/config", "/api/visitor", "/api/scan", "/api/scan/batch"}
+    if fingerprint_id and client_ip and request.url.path not in skip_paths:
+        asyncio.create_task(asyncio.to_thread(track_visit, fingerprint_id, client_ip))
     logger.info(
         "Request completed",
         extra={
@@ -110,6 +123,32 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/api/config")
+async def client_config() -> dict:
+    return {
+        "fingerprint_public_key": settings.fingerprintjs_public_key,
+        "visitor_tracking_enabled": settings.visitor_tracking_enabled,
+    }
+
+
+@app.post("/api/visitor")
+async def visitor_snapshot(request: Request) -> dict:
+    fingerprint_id = request.headers.get("x-fingerprint-id", "").strip()
+    if not fingerprint_id:
+        raise HTTPException(status_code=400, detail="Fingerprint is required")
+    client_ip = (
+        request.headers.get("cf-connecting-ip")
+        or request.headers.get("x-real-ip")
+        or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
+        or (request.client.host if request.client else "")
+    )
+    if not client_ip:
+        raise HTTPException(status_code=400, detail="Client IP not found")
+
+    snapshot = await asyncio.to_thread(track_visit, fingerprint_id, client_ip)
+    return {"enabled": bool(snapshot), "snapshot": snapshot.to_dict() if snapshot else None}
+
+
 @app.post(
     "/api/scan",
     response_model=ScanResult,
@@ -122,6 +161,17 @@ async def health() -> dict:
 async def scan_endpoint(payload: ScanRequest, request: Request) -> ScanResult:
     require_api_key(request)
     limiter.check(request)
+    fingerprint_id = request.headers.get("x-fingerprint-id", "").strip()
+    client_ip = (
+        request.headers.get("cf-connecting-ip")
+        or request.headers.get("x-real-ip")
+        or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
+        or (request.client.host if request.client else "")
+    )
+    if fingerprint_id and client_ip:
+        asyncio.create_task(
+            asyncio.to_thread(track_visit, fingerprint_id, client_ip, "scan")
+        )
     result, error = safe_scan(payload.url)
     if error:
         raise HTTPException(status_code=400, detail=error)
@@ -141,6 +191,18 @@ async def scan_endpoint(payload: ScanRequest, request: Request) -> ScanResult:
 async def scan_batch_endpoint(payload: BatchScanRequest, request: Request) -> BatchScanResult:
     require_api_key(request)
     limiter.check(request)
+
+    fingerprint_id = request.headers.get("x-fingerprint-id", "").strip()
+    client_ip = (
+        request.headers.get("cf-connecting-ip")
+        or request.headers.get("x-real-ip")
+        or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
+        or (request.client.host if request.client else "")
+    )
+    if fingerprint_id and client_ip:
+        asyncio.create_task(
+            asyncio.to_thread(track_visit, fingerprint_id, client_ip, "scan")
+        )
 
     if len(payload.targets) > settings.batch_max_targets:
         raise HTTPException(

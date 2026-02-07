@@ -171,6 +171,13 @@ h1 {
   gap: 24px;
 }
 
+.visitor {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-bottom: 24px;
+}
+
 .score-card {
   display: flex;
   justify-content: space-between;

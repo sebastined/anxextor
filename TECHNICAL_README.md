@@ -154,6 +154,50 @@ Response:
 }
 ```
 
+### GET /api/config
+
+```json
+{
+  "fingerprint_public_key": "fpjs_public_key",
+  "visitor_tracking_enabled": true
+}
+```
+
+### POST /api/visitor
+
+Headers:
+
+```
+X-Fingerprint-ID: <fingerprint>
+```
+
+Response:
+
+```json
+{
+  "enabled": true,
+  "snapshot": {
+    "fingerprint_id": "fp",
+    "ip": "203.0.113.10",
+    "country": "NG",
+    "city": "Lagos",
+    "behind_proxy": false,
+    "visit_count": 1,
+    "scan_count": 0,
+    "last_visit_at": "2026-02-07T14:33:30Z",
+    "visit_windows": {
+      "5m": 1,
+      "30m": 1,
+      "1h": 1,
+      "1d": 1,
+      "1w": 1,
+      "1mo": 1,
+      "1y": 1
+    }
+  }
+}
+```
+
 ## Configuration
 
 - ANXEXTOR_API_KEY: optional API key for /api/scan.
@@ -162,6 +206,18 @@ Response:
 - ANXEXTOR_HTTP_RETRIES: default 2.
 - ANXEXTOR_LOG_LEVEL: default INFO.
 - ANXEXTOR_BATCH_MAX_TARGETS: default 5.
+- ANXEXTOR_SUPABASE_URL: Supabase project URL for visitor tracking.
+- ANXEXTOR_SUPABASE_SERVICE_KEY: Supabase service role key (server-side).
+- ANXEXTOR_IPINFO_TOKEN: ipinfo.io token for geo and proxy/vpn signals.
+- ANXEXTOR_FINGERPRINTJS_PUBLIC_KEY: FingerprintJS Pro public key.
+- ANXEXTOR_IP_ENCRYPTION_KEY: Fernet key for encrypting raw IPs.
+- ANXEXTOR_IP_HASH_SALT: Salt used when hashing IPs.
+- ANXEXTOR_VISITOR_TRACKING_ENABLED: default true.
+
+## Visitor tracking
+
+The UI collects a FingerprintJS ID and the API stores visitor stats in Supabase.
+See docs/visitor_tracking.sql for table definitions.
 
 ## Local setup
 
