@@ -18,7 +18,8 @@ from .config import settings
 ROOT_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = ROOT_DIR / "frontend"
 
-logging.basicConfig(level=settings.log_level)
+log_level = (settings.log_level or "INFO").strip() or "INFO"
+logging.basicConfig(level=log_level)
 
 app = FastAPI(title="anxextor", version="0.1.0")
 logger = logging.getLogger("anxextor")
