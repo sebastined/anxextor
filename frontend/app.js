@@ -224,6 +224,7 @@ const submitFeedback = async (rating) => {
   const existing = localStorage.getItem(FEEDBACK_KEY);
   if (existing) {
     setFeedbackActive(existing);
+    hideFeedbackModal();
     return;
   }
 
@@ -582,11 +583,19 @@ if (feedbackDownBtn) {
 }
 
 if (feedbackModalUp) {
-  feedbackModalUp.addEventListener("click", () => submitFeedback("up"));
+  feedbackModalUp.addEventListener("click", () => {
+    sessionStorage.setItem(FEEDBACK_DISMISS_KEY, "1");
+    hideFeedbackModal();
+    submitFeedback("up");
+  });
 }
 
 if (feedbackModalDown) {
-  feedbackModalDown.addEventListener("click", () => submitFeedback("down"));
+  feedbackModalDown.addEventListener("click", () => {
+    sessionStorage.setItem(FEEDBACK_DISMISS_KEY, "1");
+    hideFeedbackModal();
+    submitFeedback("down");
+  });
 }
 
 if (feedbackModalClose) {
