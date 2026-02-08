@@ -228,6 +228,10 @@ const submitFeedback = async (rating) => {
     return;
   }
 
+  localStorage.setItem(FEEDBACK_KEY, rating);
+  setFeedbackActive(rating);
+  hideFeedbackModal();
+
   const fingerprint = getFeedbackFingerprint();
   try {
     const response = await fetch("/api/feedback", {
@@ -241,9 +245,6 @@ const submitFeedback = async (rating) => {
     if (!response.ok) {
       return;
     }
-    localStorage.setItem(FEEDBACK_KEY, rating);
-    setFeedbackActive(rating);
-    hideFeedbackModal();
   } catch (error) {
     return;
   }
