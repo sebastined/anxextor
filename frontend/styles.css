@@ -114,6 +114,10 @@ body {
   z-index: 30;
 }
 
+.feedback-modal[hidden] {
+  display: none;
+}
+
 .feedback-card {
   width: min(360px, 92vw);
   background: var(--panel);
