@@ -25,8 +25,17 @@ const batchResultsEl = document.getElementById("batch-results");
 const visitorSection = document.getElementById("visitor");
 const visitorProfileEl = document.getElementById("visitor-profile");
 const visitorWindowsEl = document.getElementById("visitor-windows");
+const feedbackUpBtn = document.getElementById("feedback-up");
+const feedbackDownBtn = document.getElementById("feedback-down");
+const feedbackModal = document.getElementById("feedback-modal");
+const feedbackModalUp = document.getElementById("feedback-modal-up");
+const feedbackModalDown = document.getElementById("feedback-modal-down");
+const feedbackModalClose = document.getElementById("feedback-modal-close");
 
 const THEME_KEY = "anxextor.theme";
+const FEEDBACK_KEY = "anxextor.feedback";
+const FEEDBACK_DISMISS_KEY = "anxextor.feedback.dismissed";
+const FEEDBACK_POPUP_DELAY_MS = 60000;
 let lastResult = null;
 let lastBatch = [];
 let fingerprintId = "";
@@ -175,6 +184,81 @@ const registerVisitor = async () => {
   } catch (error) {
     return;
   }
+};
+
+const getFeedbackFingerprint = () => {
+  if (fingerprintId) {
+    return fingerprintId;
+  }
+  const cached = localStorage.getItem("anxextor.fallback_fp");
+  if (cached) {
+    return cached;
+  }
+  const fallback =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `fallback-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  localStorage.setItem("anxextor.fallback_fp", fallback);
+  return fallback;
+};
+
+const setFeedbackActive = (rating) => {
+  if (feedbackUpBtn) {
+    feedbackUpBtn.classList.toggle("active", rating === "up");
+  }
+  if (feedbackDownBtn) {
+    feedbackDownBtn.classList.toggle("active", rating === "down");
+  }
+};
+
+const hideFeedbackModal = () => {
+  if (feedbackModal) {
+    feedbackModal.hidden = true;
+  }
+};
+
+const submitFeedback = async (rating) => {
+  if (rating !== "up" && rating !== "down") {
+    return;
+  }
+  const existing = localStorage.getItem(FEEDBACK_KEY);
+  if (existing) {
+    setFeedbackActive(existing);
+    return;
+  }
+
+  const fingerprint = getFeedbackFingerprint();
+  try {
+    const response = await fetch("/api/feedback", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Fingerprint-ID": fingerprint,
+      },
+      body: JSON.stringify({ rating, page: window.location.pathname }),
+    });
+    if (!response.ok) {
+      return;
+    }
+    localStorage.setItem(FEEDBACK_KEY, rating);
+    setFeedbackActive(rating);
+    hideFeedbackModal();
+  } catch (error) {
+    return;
+  }
+};
+
+const scheduleFeedbackPopup = () => {
+  const existing = localStorage.getItem(FEEDBACK_KEY);
+  const dismissed = sessionStorage.getItem(FEEDBACK_DISMISS_KEY);
+  if (existing || dismissed) {
+    return;
+  }
+  setTimeout(() => {
+    if (!localStorage.getItem(FEEDBACK_KEY) && feedbackModal) {
+      feedbackModal.hidden = false;
+    }
+  }, FEEDBACK_POPUP_DELAY_MS);
 };
 
 const renderKeyValue = (target, data) => {
@@ -489,6 +573,29 @@ themeToggle.addEventListener("click", () => {
   setTheme(current === "dark" ? "light" : "dark");
 });
 
+if (feedbackUpBtn) {
+  feedbackUpBtn.addEventListener("click", () => submitFeedback("up"));
+}
+
+if (feedbackDownBtn) {
+  feedbackDownBtn.addEventListener("click", () => submitFeedback("down"));
+}
+
+if (feedbackModalUp) {
+  feedbackModalUp.addEventListener("click", () => submitFeedback("up"));
+}
+
+if (feedbackModalDown) {
+  feedbackModalDown.addEventListener("click", () => submitFeedback("down"));
+}
+
+if (feedbackModalClose) {
+  feedbackModalClose.addEventListener("click", () => {
+    sessionStorage.setItem(FEEDBACK_DISMISS_KEY, "1");
+    hideFeedbackModal();
+  });
+}
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   statusEl.textContent = "Scanning...";
@@ -539,6 +646,11 @@ form.addEventListener("submit", async (event) => {
 const bootstrap = async () => {
   await initFingerprint();
   await registerVisitor();
+  const existing = localStorage.getItem(FEEDBACK_KEY);
+  if (existing) {
+    setFeedbackActive(existing);
+  }
+  scheduleFeedbackPopup();
 };
 
 bootstrap();

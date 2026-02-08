@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 import httpx
-from cryptography.fernet import Fernet
-
 from .config import settings
+from .privacy import encrypt_ip, hash_ip
+from .supabase_utils import get_rest_base, get_rest_headers
 
 logger = logging.getLogger("anxextor.visitors")
 
@@ -51,42 +50,11 @@ class VisitorSnapshot:
 
 
 def _get_rest_base() -> Optional[str]:
-    if not settings.supabase_url or not settings.supabase_service_key:
-        return None
-    return f"{settings.supabase_url.rstrip('/')}/rest/v1"
+    return get_rest_base()
 
 
 def _get_rest_headers() -> Optional[Dict[str, str]]:
-    if not settings.supabase_service_key:
-        return None
-    return {
-        "apikey": settings.supabase_service_key,
-        "authorization": f"Bearer {settings.supabase_service_key}",
-        "content-type": "application/json",
-    }
-
-
-def _get_fernet() -> Optional[Fernet]:
-    if not settings.ip_encryption_key:
-        return None
-    try:
-        return Fernet(settings.ip_encryption_key)
-    except Exception:
-        logger.warning("Invalid IP encryption key format")
-        return None
-
-
-def _hash_ip(ip_value: str) -> str:
-    salt = settings.ip_hash_salt or ""
-    digest = hashlib.sha256(f"{salt}:{ip_value}".encode("utf-8")).hexdigest()
-    return digest
-
-
-def _encrypt_ip(ip_value: str) -> Optional[str]:
-    fernet = _get_fernet()
-    if not fernet:
-        return None
-    return fernet.encrypt(ip_value.encode("utf-8")).decode("utf-8")
+    return get_rest_headers()
 
 
 def _get_ipinfo(ip_value: str) -> Dict[str, Any]:
@@ -167,8 +135,8 @@ def track_visit(
         return None
 
     now = datetime.now(timezone.utc)
-    ip_hash = _hash_ip(ip_value)
-    encrypted_ip = _encrypt_ip(ip_value)
+    ip_hash = hash_ip(ip_value)
+    encrypted_ip = encrypt_ip(ip_value)
     ipinfo = _get_ipinfo(ip_value)
 
     country = ipinfo.get("country")

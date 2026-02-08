@@ -77,3 +77,8 @@ class BatchScanError(BaseModel):
 class BatchScanResult(BaseModel):
     results: List[ScanResult]
     errors: List[BatchScanError]
+
+
+class FeedbackRequest(BaseModel):
+    rating: str = Field(..., description="Feedback rating", examples=["up", "down"])
+    page: Optional[str] = Field(None, description="Page where feedback was given")

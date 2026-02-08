@@ -11,6 +11,22 @@
       <header class="hero">
         <p class="badge">anxextor</p>
         <div class="toolbar">
+          <div class="feedback">
+            <button id="feedback-up" class="feedback-btn" type="button" aria-label="Thumbs up">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M2 10h4v10H2V10zm6 0h8.5c.6 0 1.1.3 1.4.8l2.6 4.2c.2.3.3.7.3 1.1v.6c0 1.3-1.1 2.4-2.4 2.4H10c-.7 0-1.3-.5-1.4-1.2L8 10zM9 4.8l3.2-2.8c.3-.3.8-.4 1.2-.2.4.2.6.6.6 1v4.2H9z"
+                />
+              </svg>
+            </button>
+            <button id="feedback-down" class="feedback-btn" type="button" aria-label="Thumbs down">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M2 4h4v10H2V4zm6 10h8.5c.6 0 1.1-.3 1.4-.8l2.6-4.2c.2-.3.3-.7.3-1.1v-.6c0-1.3-1.1-2.4-2.4-2.4H10c-.7 0-1.3.5-1.4 1.2L8 14zM9 19.2l3.2 2.8c.3.3.8.4 1.2.2.4-.2.6-.6.6-1v-4.2H9z"
+                />
+              </svg>
+            </button>
+          </div>
           <button id="theme-toggle" class="btn-3d" type="button">Light mode</button>
         </div>
         <h1>Web security scanner</h1>
@@ -115,6 +131,18 @@
         </div>
       </section>
     </main>
+    <div id="feedback-modal" class="feedback-modal" hidden>
+      <div class="feedback-card">
+        <p>Was this helpful?</p>
+        <div class="feedback-actions">
+          <button id="feedback-modal-up" class="feedback-btn" type="button">Thumbs up</button>
+          <button id="feedback-modal-down" class="feedback-btn" type="button">Thumbs down</button>
+        </div>
+        <button id="feedback-modal-close" class="feedback-close" type="button">
+          Not now
+        </button>
+      </div>
+    </div>
     <footer class="footer">
       <p>Copyright sebastine <span id="year"></span></p>
     </footer>

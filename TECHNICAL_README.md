@@ -198,6 +198,31 @@ Response:
 }
 ```
 
+### POST /api/feedback
+
+Headers:
+
+```
+X-Fingerprint-ID: <fingerprint>
+```
+
+Request:
+
+```json
+{
+  "rating": "up",
+  "page": "/"
+}
+```
+
+Response:
+
+```json
+{
+  "status": "ok"
+}
+```
+
 ## Configuration
 
 - ANXEXTOR_API_KEY: optional API key for /api/scan.

@@ -10,12 +10,13 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .models import BatchScanRequest, BatchScanResult, ScanRequest, ScanResult
+from .models import BatchScanRequest, BatchScanResult, FeedbackRequest, ScanRequest, ScanResult
 from .scanner import safe_scan
 from .auth import require_api_key
 from .rate_limit import RateLimiter
 from .config import settings
 from .visitors import track_visit
+from .feedback import record_feedback
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = ROOT_DIR / "frontend"
@@ -95,7 +96,14 @@ async def add_request_context(request: Request, call_next):
         or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
         or (request.client.host if request.client else "")
     )
-    skip_paths = {"/health", "/api/config", "/api/visitor", "/api/scan", "/api/scan/batch"}
+    skip_paths = {
+        "/health",
+        "/api/config",
+        "/api/visitor",
+        "/api/scan",
+        "/api/scan/batch",
+        "/api/feedback",
+    }
     if fingerprint_id and client_ip and request.url.path not in skip_paths:
         asyncio.create_task(asyncio.to_thread(track_visit, fingerprint_id, client_ip))
     logger.info(
@@ -147,6 +155,34 @@ async def visitor_snapshot(request: Request) -> dict:
 
     snapshot = await asyncio.to_thread(track_visit, fingerprint_id, client_ip)
     return {"enabled": bool(snapshot), "snapshot": snapshot.to_dict() if snapshot else None}
+
+
+@app.post("/api/feedback")
+async def feedback_submit(payload: FeedbackRequest, request: Request) -> dict:
+    fingerprint_id = request.headers.get("x-fingerprint-id", "").strip()
+    if not fingerprint_id:
+        raise HTTPException(status_code=400, detail="Fingerprint is required")
+    client_ip = (
+        request.headers.get("cf-connecting-ip")
+        or request.headers.get("x-real-ip")
+        or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
+        or (request.client.host if request.client else "")
+    )
+    if not client_ip:
+        raise HTTPException(status_code=400, detail="Client IP not found")
+
+    user_agent = request.headers.get("user-agent")
+    success = await asyncio.to_thread(
+        record_feedback,
+        fingerprint_id,
+        client_ip,
+        payload.rating,
+        user_agent,
+        payload.page,
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail="Feedback not recorded")
+    return {"status": "ok"}
 
 
 @app.post(
