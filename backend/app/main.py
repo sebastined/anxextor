@@ -16,7 +16,7 @@ from .auth import require_api_key
 from .rate_limit import RateLimiter
 from .config import settings
 from .visitors import track_visit
-from .feedback import record_feedback
+from .feedback import get_feedback_summary, record_feedback
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = ROOT_DIR / "frontend"
@@ -182,7 +182,17 @@ async def feedback_submit(payload: FeedbackRequest, request: Request) -> dict:
     )
     if not success:
         raise HTTPException(status_code=400, detail="Feedback not recorded")
-    return {"status": "ok"}
+    summary = await asyncio.to_thread(get_feedback_summary, fingerprint_id, payload.page)
+    return {"status": "ok", "summary": summary}
+
+
+@app.get("/api/feedback/summary")
+async def feedback_summary(request: Request, page: str | None = None) -> dict:
+    fingerprint_id = request.headers.get("x-fingerprint-id", "").strip()
+    if not fingerprint_id:
+        raise HTTPException(status_code=400, detail="Fingerprint is required")
+    summary = await asyncio.to_thread(get_feedback_summary, fingerprint_id, page)
+    return {"summary": summary}
 
 
 @app.post(

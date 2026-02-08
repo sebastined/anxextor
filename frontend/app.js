@@ -27,6 +27,8 @@ const visitorProfileEl = document.getElementById("visitor-profile");
 const visitorWindowsEl = document.getElementById("visitor-windows");
 const feedbackUpBtn = document.getElementById("feedback-up");
 const feedbackDownBtn = document.getElementById("feedback-down");
+const feedbackUpCountEl = document.getElementById("feedback-up-count");
+const feedbackDownCountEl = document.getElementById("feedback-down-count");
 const feedbackModal = document.getElementById("feedback-modal");
 const feedbackModalUp = document.getElementById("feedback-modal-up");
 const feedbackModalDown = document.getElementById("feedback-modal-down");
@@ -217,6 +219,42 @@ const hideFeedbackModal = () => {
   }
 };
 
+const setFeedbackCounts = (summary) => {
+  if (!summary) {
+    return;
+  }
+  const up = Number(summary.up ?? 0);
+  const down = Number(summary.down ?? 0);
+  if (feedbackUpCountEl) {
+    feedbackUpCountEl.textContent = String(up);
+  }
+  if (feedbackDownCountEl) {
+    feedbackDownCountEl.textContent = String(down);
+  }
+  if (summary.user_rating) {
+    setFeedbackActive(summary.user_rating);
+  }
+};
+
+const fetchFeedbackSummary = async () => {
+  const fingerprint = getFeedbackFingerprint();
+  try {
+    const response = await fetch(
+      `/api/feedback/summary?page=${encodeURIComponent(window.location.pathname)}`,
+      {
+        headers: { "X-Fingerprint-ID": fingerprint },
+      }
+    );
+    if (!response.ok) {
+      return;
+    }
+    const data = await response.json();
+    setFeedbackCounts(data.summary);
+  } catch (error) {
+    return;
+  }
+};
+
 const submitFeedback = async (rating) => {
   if (rating !== "up" && rating !== "down") {
     return;
@@ -245,6 +283,8 @@ const submitFeedback = async (rating) => {
     if (!response.ok) {
       return;
     }
+    const data = await response.json();
+    setFeedbackCounts(data.summary);
   } catch (error) {
     return;
   }
@@ -660,6 +700,7 @@ const bootstrap = async () => {
   if (existing) {
     setFeedbackActive(existing);
   }
+  await fetchFeedbackSummary();
   scheduleFeedbackPopup();
 };
 

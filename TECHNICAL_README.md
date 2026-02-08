@@ -219,7 +219,32 @@ Response:
 
 ```json
 {
-  "status": "ok"
+  "status": "ok",
+  "summary": {
+    "up": 12,
+    "down": 3,
+    "user_rating": "up"
+  }
+}
+```
+
+### GET /api/feedback/summary
+
+Headers:
+
+```
+X-Fingerprint-ID: <fingerprint>
+```
+
+Response:
+
+```json
+{
+  "summary": {
+    "up": 12,
+    "down": 3,
+    "user_rating": "up"
+  }
 }
 ```
 

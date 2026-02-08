@@ -41,3 +41,6 @@ create index if not exists feedback_events_fingerprint_idx
 
 create index if not exists feedback_events_rating_idx
   on feedback_events (rating, created_at desc);
+
+create unique index if not exists feedback_events_unique_idx
+  on feedback_events (fingerprint_id, page);

@@ -81,15 +81,17 @@ body {
 }
 
 .feedback-btn {
-  width: 36px;
   height: 36px;
-  border-radius: 50%;
+  min-width: 36px;
+  border-radius: 999px;
   border: none;
   background: rgba(244, 211, 94, 0.15);
   color: var(--accent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
   cursor: pointer;
 }
 
@@ -97,6 +99,11 @@ body {
   width: 20px;
   height: 20px;
   fill: currentColor;
+}
+
+.feedback-count {
+  font-size: 0.8rem;
+  color: var(--text);
 }
 
 .feedback-btn.active {

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Dict, Optional
 
 import httpx
 
@@ -43,7 +43,8 @@ def record_feedback(
     try:
         response = httpx.post(
             f"{rest_base}/feedback_events",
-            headers=headers,
+            params={"on_conflict": "fingerprint_id,page"},
+            headers={**headers, "prefer": "resolution=merge-duplicates"},
             json=payload,
             timeout=5.0,
         )
@@ -51,3 +52,61 @@ def record_feedback(
     except Exception:
         logger.exception("Failed to record feedback")
         return False
+
+
+def get_feedback_summary(
+    fingerprint_id: str,
+    page: Optional[str],
+) -> Optional[Dict[str, Optional[int]]]:
+    rest_base = get_rest_base()
+    headers = get_rest_headers()
+    if not rest_base or not headers:
+        return None
+
+    page_value = page or "/"
+    params = {"page": f"eq.{page_value}"}
+
+    def _count(rating: str) -> int:
+        try:
+            response = httpx.get(
+                f"{rest_base}/feedback_events",
+                params={**params, "rating": f"eq.{rating}", "select": "id"},
+                headers={**headers, "prefer": "count=exact"},
+                timeout=5.0,
+            )
+        except Exception:
+            logger.exception("Failed to count feedback")
+            return 0
+
+        content_range = response.headers.get("content-range") or ""
+        if "/" in content_range:
+            total = content_range.split("/")[-1]
+            if total.isdigit():
+                return int(total)
+        return 0
+
+    user_rating = None
+    try:
+        response = httpx.get(
+            f"{rest_base}/feedback_events",
+            params={
+                **params,
+                "fingerprint_id": f"eq.{fingerprint_id}",
+                "select": "rating",
+                "limit": 1,
+            },
+            headers=headers,
+            timeout=5.0,
+        )
+        if response.status_code == 200:
+            data = response.json()
+            if isinstance(data, list) and data:
+                user_rating = data[0].get("rating")
+    except Exception:
+        logger.exception("Failed to fetch user feedback")
+
+    return {
+        "up": _count("up"),
+        "down": _count("down"),
+        "user_rating": user_rating,
+    }
