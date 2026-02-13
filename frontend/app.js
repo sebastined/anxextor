@@ -274,13 +274,8 @@ const submitFeedback = async (rating) => {
   if (rating !== "up" && rating !== "down") {
     return;
   }
-  const existing = localStorage.getItem(FEEDBACK_KEY);
-  if (existing) {
-    setFeedbackActive(existing);
-    hideFeedbackModal();
-    return;
-  }
 
+  // Update UI immediately
   localStorage.setItem(FEEDBACK_KEY, rating);
   setFeedbackActive(rating);
   hideFeedbackModal();

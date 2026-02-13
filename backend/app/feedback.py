@@ -41,10 +41,10 @@ def record_feedback(
     }
 
     try:
+        # Record every vote as a new event
         response = httpx.post(
             f"{rest_base}/feedback_events",
-            params={"on_conflict": "fingerprint_id,page"},
-            headers={**headers, "prefer": "resolution=merge-duplicates"},
+            headers=headers,
             json=payload,
             timeout=5.0,
         )
@@ -87,10 +87,11 @@ def get_feedback_summary(
 
     user_rating = None
     try:
+        # Get user's preference from the prefs table
         response = httpx.get(
-            f"{rest_base}/feedback_events",
+            f"{rest_base}/feedback_user_prefs",
             params={
-                **params,
+                "page": f"eq.{page_value}",
                 "fingerprint_id": f"eq.{fingerprint_id}",
                 "select": "rating",
                 "limit": 1,
