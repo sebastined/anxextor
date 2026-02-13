@@ -270,10 +270,16 @@ def _cookie_findings(set_cookies: List[str], is_https: bool) -> List[ScanFinding
                     "SameSite=None without Secure",
                     "high",
                     f"Cookie {name} sets SameSite=None without Secure.",
-                "Cookies with SameSite=None MUST include the Secure attribute to prevent CSRF attacks. This is a browser requirement for cross-site cookie usage. Ensure all such cookies are transmitted only over HTTPS.",
-                cve="CWE-352",
-                cvss_score=8.8,
-                reference_url="https://cwe.mitre.org/data/definitions/352.html",
+                    "Cookies with SameSite=None MUST include the Secure attribute to prevent CSRF attacks. This is a browser requirement for cross-site cookie usage. Ensure all such cookies are transmitted only over HTTPS.",
+                    cve="CWE-352",
+                    cvss_score=8.8,
+                    reference_url="https://cwe.mitre.org/data/definitions/352.html",
+                )
+            )
+
+    if not is_https:
+        findings.append(
+            _finding(
                 "cookies_over_http",
                 "Cookies set over HTTP",
                 "medium",
