@@ -626,17 +626,31 @@ def scan(target: str) -> ScanResult:
     timeout = httpx.Timeout(REQUEST_TIMEOUT, connect=5.0)
     limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
 
+    # Try with SSL verification first
+    ssl_error = None
+    response = None
+    
     with httpx.Client(
         headers={"User-Agent": USER_AGENT},
         follow_redirects=True,
         timeout=timeout,
         limits=limits,
+        verify=True,
     ) as client:
         last_error: Optional[Exception] = None
         for attempt in range(RETRY_COUNT + 1):
             try:
                 response = client.get(normalized_url)
                 break
+            except (ssl.SSLError, httpx.ConnectError) as exc:
+                # SSL verification failed - record error and retry without verification
+                if "CERTIFICATE_VERIFY_FAILED" in str(exc) or "certificate verify failed" in str(exc).lower():
+                    ssl_error = exc
+                    break
+                last_error = exc
+                if attempt >= RETRY_COUNT:
+                    raise
+                time.sleep(0.2 * (attempt + 1))
             except httpx.HTTPError as exc:
                 last_error = exc
                 if attempt >= RETRY_COUNT:
@@ -645,6 +659,46 @@ def scan(target: str) -> ScanResult:
         else:
             if last_error:
                 raise last_error
+    
+    # If SSL verification failed, retry without verification but flag the issue
+    if ssl_error and not response:
+        findings.append(
+            _finding(
+                "ssl_verification_failed",
+                "SSL certificate verification failed",
+                "high",
+                f"Certificate verification error: {str(ssl_error)}",
+                "Fix SSL certificate chain. Ensure intermediate certificates are properly configured and the certificate is issued by a trusted CA. Use SSL Labs (ssllabs.com/ssltest) to diagnose certificate issues.",
+                cve="CWE-295",
+                cvss_score=7.4,
+                reference_url="https://cwe.mitre.org/data/definitions/295.html",
+            )
+        )
+        
+        # Retry without verification to gather other security info
+        with httpx.Client(
+            headers={"User-Agent": USER_AGENT},
+            follow_redirects=True,
+            timeout=timeout,
+            limits=limits,
+            verify=False,
+        ) as client:
+            last_error = None
+            for attempt in range(RETRY_COUNT + 1):
+                try:
+                    response = client.get(normalized_url)
+                    break
+                except httpx.HTTPError as exc:
+                    last_error = exc
+                    if attempt >= RETRY_COUNT:
+                        raise
+                    time.sleep(0.2 * (attempt + 1))
+            else:
+                if last_error:
+                    raise last_error
+    
+    if not response:
+        raise httpx.HTTPError("Failed to retrieve response")
 
     set_cookies = response.headers.get_list("set-cookie")
     headers = {key.lower(): value for key, value in response.headers.items()}
