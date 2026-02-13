@@ -725,8 +725,21 @@ pdfBtn.addEventListener("click", () => {
       .finding-item { page-break-inside: avoid; }
       .findings-section { page-break-before: always; }
     }
+    
+    /* Chart styling */
+    .charts-section { margin-bottom: 30px; }
+    .charts-section h2 { font-size: 14pt; font-weight: bold; margin-bottom: 15px; color: #1a237e; border-bottom: 2px solid #1976d2; padding-bottom: 10px; }
+    .charts-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    .chart-box { background: #f9f9f9; border: 1px solid #e0e0e0; padding: 15px; border-radius: 4px; }
+    .chart-box h3 { font-size: 11pt; font-weight: bold; color: #1a237e; margin-bottom: 10px; text-align: center; }
+    .chart-box canvas { max-width: 100%; display: block; margin: 0 auto; }
   `;
   doc.head.appendChild(style);
+  
+  // Load Chart.js library
+  const script = doc.createElement("script");
+  script.src = "https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js";
+  doc.head.appendChild(script);
 
   // == COVER PAGE ==
   // Header
@@ -806,6 +819,99 @@ pdfBtn.addEventListener("click", () => {
   });
   riskOverview.appendChild(riskTable);
   body.appendChild(riskOverview);
+
+  // Charts Section
+  const chartsSection = doc.createElement("div");
+  chartsSection.className = "charts-section";
+  const chartsTitle = doc.createElement("h2");
+  chartsTitle.textContent = "Vulnerability Distribution Analysis";
+  chartsSection.appendChild(chartsTitle);
+  
+  const chartsContainer = doc.createElement("div");
+  chartsContainer.className = "charts-container";
+  
+  // Severity Pie Chart
+  const severityChartBox = doc.createElement("div");
+  severityChartBox.className = "chart-box";
+  const severityChartTitle = doc.createElement("h3");
+  severityChartTitle.textContent = "Severity Distribution";
+  severityChartBox.appendChild(severityChartTitle);
+  const severityCanvas = doc.createElement("canvas");
+  severityCanvas.id = "severityChart";
+  severityCanvas.height = 250;
+  severityChartBox.appendChild(severityCanvas);
+  chartsContainer.appendChild(severityChartBox);
+  
+  // CVE Distribution Chart
+  const cveChartBox = doc.createElement("div");
+  cveChartBox.className = "chart-box";
+  const cveChartTitle = doc.createElement("h3");
+  cveChartTitle.textContent = "CVE Coverage";
+  cveChartBox.appendChild(cveChartTitle);
+  const cveCanvas = doc.createElement("canvas");
+  cveCanvas.id = "cveChart";
+  cveCanvas.height = 250;
+  cveChartBox.appendChild(cveCanvas);
+  chartsContainer.appendChild(cveChartBox);
+  
+  chartsSection.appendChild(chartsContainer);
+  body.appendChild(chartsSection);
+
+  // Initialize charts after DOM is ready
+  setTimeout(() => {
+    const severityCtx = doc.getElementById("severityChart").getContext("2d");
+    new printWindow.Chart(severityCtx, {
+      type: "doughnut",
+      data: {
+        labels: ["Critical", "High", "Medium", "Low"],
+        datasets: [{
+          data: [criticalCount, highCount, mediumCount, lowCount],
+          backgroundColor: ["#d32f2f", "#f57c00", "#fbc02d", "#388e3c"],
+          borderColor: ["#c62828", "#e65100", "#f9a825", "#2e7d32"],
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { font: { size: 11, family: "Calibri, Arial" } },
+          },
+        },
+      },
+    });
+    
+    const cveCtx = doc.getElementById("cveChart").getContext("2d");
+    const withCVE = safeResult.findings.filter(f => f.cve).length;
+    const withoutCVE = safeResult.findings.length - withCVE;
+    new printWindow.Chart(cveCtx, {
+      type: "bar",
+      data: {
+        labels: ["With CVE Reference", "Without CVE"],
+        datasets: [{
+          label: "Findings",
+          data: [withCVE, withoutCVE],
+          backgroundColor: ["#1976d2", "#bdbdbd"],
+          borderColor: ["#1565c0", "#9e9e9e"],
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        indexAxis: "y",
+        plugins: {
+          legend: { labels: { font: { size: 11, family: "Calibri, Arial" } } },
+        },
+        scales: {
+          x: { beginAtZero: true, ticks: { font: { size: 10 } } },
+          y: { ticks: { font: { size: 10 } } },
+        },
+      },
+    });
+  }, 100);
 
   // Page break before findings
   const pageBreak = doc.createElement("div");
