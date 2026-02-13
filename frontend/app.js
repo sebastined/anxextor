@@ -628,44 +628,107 @@ pdfBtn.addEventListener("click", () => {
   doc.title = "anxextor Security Assessment Report";
   const body = doc.body;
 
-  // Add professional styling
+  // Add professional OWASP-style styling
   const style = doc.createElement("style");
   style.textContent = `
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; color: #333; line-height: 1.6; }
-    .header { border-bottom: 3px solid #0066cc; padding-bottom: 20px; margin-bottom: 30px; }
-    .header h1 { margin: 0; color: #0066cc; font-size: 28px; }
-    .header .subtitle { color: #666; font-size: 14px; margin-top: 5px; }
-    .meta-box { background: #f5f5f5; padding: 15px; border-left: 4px solid #0066cc; margin: 20px 0; }
-    .meta-box p { margin: 5px 0; }
-    .score-section { margin: 20px 0; }
-    .score-badge { display: inline-block; padding: 10px 20px; border-radius: 5px; font-weight: bold; font-size: 20px; }
-    .grade-A, .grade-B { background: #28a745; color: white; }
-    .grade-C { background: #ffc107; color: #333; }
-    .grade-D { background: #fd7e14; color: white; }
-    .grade-F { background: #dc3545; color: white; }
-    .findings-list { counter-reset: finding-counter; list-style: none; padding: 0; }
-    .findings-list li { counter-increment: finding-counter; margin-bottom: 25px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; page-break-inside: avoid; }
-    .findings-list li:before { content: counter(finding-counter) ". "; font-weight: bold; color: #0066cc; }
-    .severity { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-left: 10px; }
-    .severity-high { background: #dc3545; color: white; }
-    .severity-medium { background: #ffc107; color: #333; }
-    .severity-low { background: #17a2b8; color: white; }
-    .severity-info { background: #6c757d; color: white; }
-    .finding-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; }
-    .cvss-badge { display: inline-block; padding: 2px 6px; background: #343a40; color: white; border-radius: 3px; font-size: 11px; margin-left: 8px; }
-    .finding-detail { margin-top: 8px; color: #555; }
-    .finding-detail strong { color: #333; }
-    .cve-link { color: #0066cc; text-decoration: none; font-family: monospace; }
-    .remediation-section { margin-top: 30px; }
-    .remediation-section h2 { color: #0066cc; border-bottom: 2px solid #0066cc; padding-bottom: 10px; }
-    .remediation-list { padding-left: 20px; }
-    .remediation-list li { margin-bottom: 15px; }
-    .footer { margin-top: 50px; padding-top: 20px; border-top: 2px solid #ddd; text-align: center; color: #666; font-size: 12px; }
-    .footer .email { color: #0066cc; font-weight: bold; font-size: 14px; }
-    @media print { body { margin: 20px; } .findings-list li { page-break-inside: avoid; } }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Calibri', 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #1f1f1f; line-height: 1.5; background: white; }
+    
+    /* Page breaks */
+    .page-break { page-break-after: always; margin-bottom: 40px; }
+    
+    /* Header & Title */
+    .header { background: linear-gradient(135deg, #1a237e 0%, #283593 100%); color: white; padding: 40px; text-align: center; margin-bottom: 40px; }
+    .header h1 { font-size: 28pt; font-weight: bold; margin-bottom: 10px; }
+    .header .subtitle { font-size: 12pt; opacity: 0.9; }
+    
+    /* Executive Summary */
+    .executive-summary { background: #f5f5f5; border-left: 5px solid #1976d2; padding: 20px; margin-bottom: 30px; }
+    .executive-summary h2 { font-size: 14pt; font-weight: bold; margin-bottom: 15px; color: #1a237e; }
+    .summary-item { margin-bottom: 10px; }
+    .summary-item strong { color: #1f1f1f; }
+    
+    /* Score/Risk Section */
+    .risk-overview { display: table; width: 100%; margin-bottom: 30px; border-collapse: collapse; }
+    .risk-cell { display: table-cell; border: 1px solid #ddd; padding: 15px; }
+    .risk-label { font-weight: bold; color: #1a237e; }
+    .risk-value { font-size: 18pt; font-weight: bold; margin-top: 5px; }
+    .risk-critical { color: #d32f2f; }
+    .risk-high { color: #f57c00; }
+    .risk-medium { color: #fbc02d; }
+    .risk-low { color: #388e3c; }
+    
+    /* Table of Contents */
+    .toc { page-break-after: always; margin-bottom: 40px; }
+    .toc h2 { font-size: 14pt; font-weight: bold; margin-bottom: 15px; color: #1a237e; border-bottom: 2px solid #1976d2; padding-bottom: 10px; }
+    .toc-item { margin-bottom: 8px; padding-left: 20px; }
+    .toc-item::before { content: "• "; color: #1976d2; }
+    
+    /* Severity Breakdown */
+    .severity-breakdown { margin-bottom: 30px; }
+    .severity-breakdown h2 { font-size: 14pt; font-weight: bold; margin-bottom: 15px; color: #1a237e; }
+    .severity-chart { display: table; width: 100%; border-collapse: collapse; }
+    .severity-row { display: table-row; }
+    .severity-cell { display: table-cell; padding: 10px; border: 1px solid #e0e0e0; text-align: center; }
+    .severity-cell-label { font-weight: bold; }
+    .severity-cell-critical { background: #ffebee; color: #d32f2f; font-weight: bold; }
+    .severity-cell-high { background: #fff3e0; color: #f57c00; font-weight: bold; }
+    .severity-cell-medium { background: #fffde7; color: #fbc02d; font-weight: bold; }
+    .severity-cell-low { background: #e8f5e9; color: #388e3c; font-weight: bold; }
+    
+    /* Findings Section */
+    .findings-section { page-break-before: always; margin-top: 40px; margin-bottom: 40px; }
+    .findings-section h2 { font-size: 14pt; font-weight: bold; margin-bottom: 20px; color: #1a237e; border-bottom: 2px solid #1976d2; padding-bottom: 10px; }
+    .findings-list { list-style: none; }
+    .finding-item { margin-bottom: 30px; page-break-inside: avoid; border: 1px solid #e0e0e0; padding: 15px; background: #fafafa; }
+    
+    /* Finding Header */
+    .finding-header { display: table; width: 100%; margin-bottom: 10px; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; }
+    .finding-number { display: table-cell; font-weight: bold; color: #1976d2; vertical-align: top; width: 40px; }
+    .finding-title-cell { display: table-cell; vertical-align: top; padding-left: 10px; }
+    .finding-title { font-weight: bold; font-size: 12pt; color: #1f1f1f; margin-bottom: 5px; }
+    .finding-badges { display: inline-block; }
+    .finding-badges .badge { display: inline-block; margin-right: 10px; padding: 3px 8px; border-radius: 3px; font-size: 9pt; font-weight: bold; }
+    .badge-severity { background: #f5f5f5; border: 1px solid #999; }
+    .badge-critical { background: #d32f2f; color: white; }
+    .badge-high { background: #f57c00; color: white; }
+    .badge-medium { background: #fbc02d; color: #1f1f1f; }
+    .badge-low { background: #388e3c; color: white; }
+    .badge-cve { background: #1976d2; color: white; }
+    .badge-cvss { background: #424242; color: white; }
+    
+    /* Finding Content */
+    .finding-content { margin-top: 10px; }
+    .finding-detail { margin-bottom: 8px; }
+    .finding-detail-label { font-weight: bold; color: #1a237e; display: inline-block; width: 120px; }
+    .finding-detail-value { color: #1f1f1f; }
+    
+    /* Remediation */
+    .remediation-box { background: #e3f2fd; border-left: 4px solid #1976d2; padding: 12px; margin-top: 10px; }
+    .remediation-label { font-weight: bold; color: #1a237e; margin-bottom: 5px; }
+    .remediation-text { color: #1f1f1f; font-size: 10pt; line-height: 1.4; }
+    
+    /* Reference */
+    .reference-link { color: #1976d2; text-decoration: none; font-family: monospace; font-size: 9pt; }
+    
+    /* Metadata Footer */
+    .metadata { margin-top: 40px; padding: 15px; background: #f5f5f5; border: 1px solid #ddd; font-size: 9pt; color: #666; }
+    .metadata p { margin-bottom: 8px; }
+    .consultant { background: #e3f2fd; padding: 15px; border-left: 4px solid #1976d2; margin-top: 20px; text-align: center; }
+    .consultant-label { font-weight: bold; color: #1a237e; }
+    .consultant-email { font-size: 12pt; font-weight: bold; color: #1976d2; margin-top: 5px; }
+    
+    /* Print optimizations */
+    @media print {
+      body { margin: 0; padding: 0; }
+      .page-break { page-break-after: always; }
+      .finding-item { page-break-inside: avoid; }
+      .findings-section { page-break-before: always; }
+    }
   `;
   doc.head.appendChild(style);
 
+  // == COVER PAGE ==
   // Header
   const header = doc.createElement("div");
   header.className = "header";
@@ -674,108 +737,218 @@ pdfBtn.addEventListener("click", () => {
   header.appendChild(heading);
   const subtitle = doc.createElement("div");
   subtitle.className = "subtitle";
-  subtitle.textContent = "Generated by anxextor - Web Security Scanner";
+  subtitle.textContent = "Web Security Scanner Assessment";
   header.appendChild(subtitle);
   body.appendChild(header);
 
-  // Scan metadata
-  const metaBox = doc.createElement("div");
-  metaBox.className = "meta-box";
-  const targetInfo = doc.createElement("p");
-  targetInfo.innerHTML = `<strong>Target:</strong> ${sanitizeText(safeResult.final_url)}`;
-  metaBox.appendChild(targetInfo);
-  const dateInfo = doc.createElement("p");
-  dateInfo.innerHTML = `<strong>Scan Date:</strong> ${new Date().toLocaleString()}`;
-  metaBox.appendChild(dateInfo);
-  const timingInfo = doc.createElement("p");
-  timingInfo.innerHTML = `<strong>Scan Duration:</strong> ${safeResult.timing_ms} ms`;
-  metaBox.appendChild(timingInfo);
-  body.appendChild(metaBox);
+  // Executive Summary
+  const execSummary = doc.createElement("div");
+  execSummary.className = "executive-summary";
+  const execTitle = doc.createElement("h2");
+  execTitle.textContent = "Executive Summary";
+  execSummary.appendChild(execTitle);
+  
+  const criticalCount = safeResult.findings.filter(f => f.severity === "Critical").length;
+  const highCount = safeResult.findings.filter(f => f.severity === "High").length;
+  const mediumCount = safeResult.findings.filter(f => f.severity === "Medium").length;
+  const lowCount = safeResult.findings.filter(f => f.severity === "Low").length;
+  
+  const summaryItems = [
+    { label: "Assessment Target", value: sanitizeText(safeResult.final_url) },
+    { label: "Assessment Date", value: new Date().toLocaleString() },
+    { label: "Overall Risk Rating", value: `Grade: ${sanitizeText(safeResult.grade)} (${safeResult.score}/100)` },
+    { label: "Critical Issues", value: `${criticalCount}` },
+    { label: "High Issues", value: `${highCount}` },
+    { label: "Medium Issues", value: `${mediumCount}` },
+    { label: "Low Issues", value: `${lowCount}` },
+    { label: "Total Findings", value: `${safeResult.findings.length}` },
+  ];
+  
+  summaryItems.forEach(item => {
+    const itemDiv = doc.createElement("div");
+    itemDiv.className = "summary-item";
+    itemDiv.innerHTML = `<strong>${item.label}:</strong> ${item.value}`;
+    execSummary.appendChild(itemDiv);
+  });
+  body.appendChild(execSummary);
 
-  // Score section
-  const scoreSection = doc.createElement("div");
-  scoreSection.className = "score-section";
-  const scoreHeading = doc.createElement("h2");
-  scoreHeading.textContent = "Security Score";
-  scoreSection.appendChild(scoreHeading);
-  const scoreBadge = doc.createElement("span");
-  scoreBadge.className = `score-badge grade-${sanitizeText(safeResult.grade)}`;
-  scoreBadge.textContent = `Score: ${safeResult.score}/100 | Grade: ${sanitizeText(safeResult.grade)}`;
-  scoreSection.appendChild(scoreBadge);
-  body.appendChild(scoreSection);
+  // Risk Overview
+  const riskOverview = doc.createElement("div");
+  const riskTitle = doc.createElement("h2");
+  riskTitle.textContent = "Risk Overview";
+  riskTitle.style.marginBottom = "15px";
+  riskTitle.style.borderBottom = "2px solid #1976d2";
+  riskTitle.style.paddingBottom = "10px";
+  riskTitle.style.color = "#1a237e";
+  riskOverview.appendChild(riskTitle);
+  
+  const riskTable = doc.createElement("div");
+  riskTable.className = "risk-overview";
+  const severityCounts = [
+    { level: "Critical", count: criticalCount, class: "risk-critical" },
+    { level: "High", count: highCount, class: "risk-high" },
+    { level: "Medium", count: mediumCount, class: "risk-medium" },
+    { level: "Low", count: lowCount, class: "risk-low" },
+  ];
+  
+  severityCounts.forEach(item => {
+    const cell = doc.createElement("div");
+    cell.className = "risk-cell";
+    const label = doc.createElement("div");
+    label.className = "risk-label";
+    label.textContent = item.level;
+    const value = doc.createElement("div");
+    value.className = `risk-value ${item.class}`;
+    value.textContent = item.count;
+    cell.appendChild(label);
+    cell.appendChild(value);
+    riskTable.appendChild(cell);
+  });
+  riskOverview.appendChild(riskTable);
+  body.appendChild(riskOverview);
 
-  // Findings
+  // Page break before findings
+  const pageBreak = doc.createElement("div");
+  pageBreak.className = "page-break";
+  body.appendChild(pageBreak);
+
+  // == FINDINGS SECTION ==
+  const findingsSection = doc.createElement("div");
+  findingsSection.className = "findings-section";
   const findingsTitle = doc.createElement("h2");
-  findingsTitle.textContent = `Findings (${safeResult.findings.length})`;
-  findingsTitle.style.marginTop = "30px";
-  body.appendChild(findingsTitle);
-
-  const findingsList = doc.createElement("ol");
+  findingsTitle.textContent = `Detailed Security Findings (${safeResult.findings.length})`;
+  findingsSection.appendChild(findingsTitle);
+  
+  const findingsList = doc.createElement("ul");
   findingsList.className = "findings-list";
-  safeResult.findings.forEach((finding) => {
-    const li = doc.createElement("li");
+  
+  safeResult.findings.forEach((finding, index) => {
+    const findingItem = doc.createElement("li");
+    findingItem.className = "finding-item";
     
-    const titleDiv = doc.createElement("div");
-    titleDiv.className = "finding-title";
-    const severitySpan = doc.createElement("span");
-    severitySpan.className = `severity severity-${sanitizeText(finding.severity).toLowerCase()}`;
-    severitySpan.textContent = sanitizeText(finding.severity).toUpperCase();
-    titleDiv.textContent = sanitizeText(finding.title);
-    titleDiv.appendChild(severitySpan);
+    // Finding Header with number and title
+    const header = doc.createElement("div");
+    header.className = "finding-header";
     
-    if (finding.cvss_score) {
-      const cvssSpan = doc.createElement("span");
-      cvssSpan.className = "cvss-badge";
-      cvssSpan.textContent = `CVSS: ${finding.cvss_score}`;
-      titleDiv.appendChild(cvssSpan);
-    }
+    const number = doc.createElement("div");
+    number.className = "finding-number";
+    number.textContent = `${index + 1}.`;
+    header.appendChild(number);
     
-    li.appendChild(titleDiv);
+    const titleCell = doc.createElement("div");
+    titleCell.className = "finding-title-cell";
     
-    const descDiv = doc.createElement("div");
-    descDiv.className = "finding-detail";
-    descDiv.innerHTML = `<strong>Description:</strong> ${sanitizeText(finding.description)}`;
-    li.appendChild(descDiv);
+    const title = doc.createElement("div");
+    title.className = "finding-title";
+    title.textContent = sanitizeText(finding.title);
+    titleCell.appendChild(title);
+    
+    // Badges
+    const badges = doc.createElement("div");
+    badges.className = "finding-badges";
+    
+    const severityBadge = doc.createElement("span");
+    severityBadge.className = `badge badge-${sanitizeText(finding.severity).toLowerCase()}`;
+    severityBadge.textContent = sanitizeText(finding.severity).toUpperCase();
+    badges.appendChild(severityBadge);
     
     if (finding.cve) {
-      const cveDiv = doc.createElement("div");
-      cveDiv.className = "finding-detail";
-      const cveLabel = doc.createElement("strong");
-      cveLabel.textContent = "Reference: ";
-      cveDiv.appendChild(cveLabel);
-      const cveLink = doc.createElement("a");
-      cveLink.className = "cve-link";
-      cveLink.href = sanitizeText(finding.reference_url || `https://cwe.mitre.org/data/definitions/${finding.cve.split('-')[1]}.html`);
-      cveLink.textContent = sanitizeText(finding.cve);
-      cveLink.target = "_blank";
-      cveDiv.appendChild(cveLink);
-      li.appendChild(cveDiv);
+      const cveBadge = doc.createElement("span");
+      cveBadge.className = "badge badge-cve";
+      cveBadge.textContent = sanitizeText(finding.cve);
+      badges.appendChild(cveBadge);
     }
     
-    const recDiv = doc.createElement("div");
-    recDiv.className = "finding-detail";
-    recDiv.innerHTML = `<strong>Remediation:</strong> ${sanitizeText(finding.recommendation)}`;
-    li.appendChild(recDiv);
+    if (finding.cvss_score) {
+      const cvssBadge = doc.createElement("span");
+      cvssBadge.className = "badge badge-cvss";
+      cvssBadge.textContent = `CVSS: ${finding.cvss_score}`;
+      badges.appendChild(cvssBadge);
+    }
     
-    findingsList.appendChild(li);
+    titleCell.appendChild(badges);
+    header.appendChild(titleCell);
+    findingItem.appendChild(header);
+    
+    // Finding Content
+    const content = doc.createElement("div");
+    content.className = "finding-content";
+    
+    const descDetail = doc.createElement("div");
+    descDetail.className = "finding-detail";
+    descDetail.innerHTML = `<span class="finding-detail-label">Description:</span> <span class="finding-detail-value">${sanitizeText(finding.description)}</span>`;
+    content.appendChild(descDetail);
+    
+    if (finding.cve && finding.reference_url) {
+      const refDetail = doc.createElement("div");
+      refDetail.className = "finding-detail";
+      refDetail.innerHTML = `<span class="finding-detail-label">Reference:</span> <span class="finding-detail-value"><a class="reference-link" href="${sanitizeText(finding.reference_url)}" target="_blank">${sanitizeText(finding.reference_url)}</a></span>`;
+      content.appendChild(refDetail);
+    }
+    
+    // Remediation Box
+    const remediationBox = doc.createElement("div");
+    remediationBox.className = "remediation-box";
+    const remLabel = doc.createElement("div");
+    remLabel.className = "remediation-label";
+    remLabel.textContent = "Recommended Remediation:";
+    remediationBox.appendChild(remLabel);
+    const remText = doc.createElement("div");
+    remText.className = "remediation-text";
+    remText.textContent = sanitizeText(finding.recommendation);
+    remediationBox.appendChild(remText);
+    content.appendChild(remediationBox);
+    
+    findingItem.appendChild(content);
+    findingsList.appendChild(findingItem);
   });
-  body.appendChild(findingsList);
+  
+  findingsSection.appendChild(findingsList);
+  body.appendChild(findingsSection);
 
-  // Footer with consultant info
-  const footer = doc.createElement("div");
-  footer.className = "footer";
-  const footerText = doc.createElement("p");
-  footerText.textContent = "For security consultation and remediation assistance, contact:";
-  footer.appendChild(footerText);
-  const emailDiv = doc.createElement("div");
-  emailDiv.className = "email";
-  emailDiv.textContent = "iam@sebastine.com";
-  footer.appendChild(emailDiv);
+  // Page break before metadata
+  const pageBreak2 = doc.createElement("div");
+  pageBreak2.className = "page-break";
+  body.appendChild(pageBreak2);
+
+  // Metadata Footer
+  const metadata = doc.createElement("div");
+  metadata.className = "metadata";
+  
+  const metaItems = [
+    { label: "Target URL", value: sanitizeText(safeResult.final_url) },
+    { label: "Report Generated", value: new Date().toLocaleString() },
+    { label: "Scanner", value: "anxextor Web Security Scanner" },
+    { label: "Scan Duration", value: `${safeResult.timing_ms}ms` },
+    { label: "Assessment Scope", value: "Web-based automated security assessment" },
+  ];
+  
+  metaItems.forEach(item => {
+    const p = doc.createElement("p");
+    p.innerHTML = `<strong>${item.label}:</strong> ${item.value}`;
+    metadata.appendChild(p);
+  });
+  
+  body.appendChild(metadata);
+
+  // Consultant Contact Box
+  const consultant = doc.createElement("div");
+  consultant.className = "consultant";
+  const consultantLabel = doc.createElement("div");
+  consultantLabel.className = "consultant-label";
+  consultantLabel.textContent = "Security Consultation & Remediation Support";
+  consultant.appendChild(consultantLabel);
+  const consultantEmail = doc.createElement("div");
+  consultantEmail.className = "consultant-email";
+  consultantEmail.textContent = "iam@sebastine.com";
+  consultant.appendChild(consultantEmail);
   const disclaimer = doc.createElement("p");
-  disclaimer.style.marginTop = "15px";
+  disclaimer.style.marginTop = "10px";
+  disclaimer.style.fontSize = "10pt";
+  disclaimer.style.color = "#666";
   disclaimer.textContent = "This report is generated automatically and should be reviewed by security professionals.";
-  footer.appendChild(disclaimer);
-  body.appendChild(footer);
+  consultant.appendChild(disclaimer);
+  body.appendChild(consultant);
 
   doc.close();
   printWindow.focus();
