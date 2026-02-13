@@ -585,7 +585,7 @@ def _dns_findings(domain: str, records: Dict[str, bool]) -> List[ScanFinding]:
                 "Missing CAA record",
                 "low",
                 "No CAA record detected.",
-                "Add CAA DNS records to restrict which Certificate Authorities can issue certificates for your domain: '0 issue "letsencrypt.org"'. This prevents unauthorized certificate issuance.",
+                "Add CAA DNS records to restrict which Certificate Authorities can issue certificates for your domain: '0 issue \"letsencrypt.org\"'. This prevents unauthorized certificate issuance.",
             )
         )
 
