@@ -129,50 +129,8 @@ class PDFReportGenerator:
     
     def __init__(self):
         self.styles = getSampleStyleSheet()
-        self._add_custom_styles()
         self.cve_fetcher = CVEFetcher()
         self.chart_gen = ChartGenerator()
-    
-    def _add_custom_styles(self):
-        """Add custom paragraph styles"""
-        self.styles.add(ParagraphStyle(
-            name='CustomTitle',
-            parent=self.styles['Heading1'],
-            fontSize=24,
-            textColor=colors.HexColor("#1a237e"),
-            spaceAfter=6,
-            alignment=TA_CENTER,
-            fontName='Helvetica-Bold'
-        ))
-        
-        self.styles.add(ParagraphStyle(
-            name='SectionHeading',
-            parent=self.styles['Heading2'],
-            fontSize=14,
-            textColor=colors.HexColor("#1a237e"),
-            spaceAfter=12,
-            spaceBefore=12,
-            borderColor=colors.HexColor("#1976d2"),
-            borderWidth=2,
-            borderPadding=10,
-            fontName='Helvetica-Bold'
-        ))
-        
-        self.styles.add(ParagraphStyle(
-            name='FindingTitle',
-            parent=self.styles['Heading3'],
-            fontSize=12,
-            textColor=colors.HexColor("#1f1f1f"),
-            spaceAfter=6,
-            fontName='Helvetica-Bold'
-        ))
-        
-        self.styles.add(ParagraphStyle(
-            name='Normal',
-            fontSize=10,
-            leading=12,
-            alignment=TA_JUSTIFY
-        ))
     
     def generate_pdf(self, scan_result: Dict) -> bytes:
         """Generate complete PDF report and return as bytes"""
@@ -218,9 +176,9 @@ class PDFReportGenerator:
         elements = []
         
         elements.append(Spacer(1, 1*inch))
-        elements.append(Paragraph("Security Assessment Report", self.styles['CustomTitle']))
+        elements.append(Paragraph("Security Assessment Report", self.styles['Heading1']))
         elements.append(Spacer(1, 0.3*inch))
-        elements.append(Paragraph("Web Security Scanner Assessment", self.styles['Heading2']))
+        elements.append(Paragraph("Web Security Scanner Assessment", self.styles['Normal']))
         elements.append(Spacer(1, 0.5*inch))
         
         # Risk Summary
@@ -260,7 +218,7 @@ class PDFReportGenerator:
         """Build executive summary section"""
         elements = []
         
-        elements.append(Paragraph("Executive Summary", self.styles['SectionHeading']))
+        elements.append(Paragraph("Executive Summary", self.styles['Heading2']))
         
         findings = scan_result.get("findings", [])
         critical = len([f for f in findings if f.get("severity") == "Critical"])
@@ -283,7 +241,7 @@ class PDFReportGenerator:
         """Build charts section"""
         elements = []
         
-        elements.append(Paragraph("Vulnerability Analysis", self.styles['SectionHeading']))
+        elements.append(Paragraph("Vulnerability Analysis", self.styles['Heading2']))
         
         findings = scan_result.get("findings", [])
         
@@ -311,7 +269,7 @@ class PDFReportGenerator:
         elements = []
         
         findings = scan_result.get("findings", [])
-        elements.append(Paragraph(f"Detailed Findings ({len(findings)})", self.styles['SectionHeading']))
+        elements.append(Paragraph(f"Detailed Findings ({len(findings)})", self.styles['Heading2']))
         
         for idx, finding in enumerate(findings, 1):
             # Finding title with severity color
@@ -324,8 +282,8 @@ class PDFReportGenerator:
             }
             severity_color = severity_color_map.get(severity, "#999999")
             
-            title = f"{idx}. {finding.get('title', 'Unknown Issue')}"
-            elements.append(Paragraph(title, self.styles['FindingTitle']))
+            # Title
+            elements.append(Paragraph(f"<b>{idx}. {finding.get('title', 'Unknown Issue')}</b>", self.styles['Heading3']))
             
             # Severity and CVE badges
             badge_text = f"<font color='{severity_color}'><b>[{severity.upper()}]</b></font>"
@@ -356,7 +314,7 @@ class PDFReportGenerator:
         elements = []
         
         elements.append(Spacer(1, 0.2*inch))
-        elements.append(Paragraph("Report Information", self.styles['SectionHeading']))
+        elements.append(Paragraph("Report Information", self.styles['Heading2']))
         
         metadata = [
             ["Target URL", scan_result.get("final_url", "N/A")],
