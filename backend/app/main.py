@@ -38,7 +38,7 @@ DEFAULT_CSP = " ".join(
         "style-src 'self' https://fonts.googleapis.com;",
         "font-src 'self' https://fonts.gstatic.com;",
         "img-src 'self' data:;",
-        "connect-src 'self' https://api.fpjs.io https://fpjscdn.net;",
+        "connect-src 'self' https://api.fpjs.io https://eu.api.fpjs.io https://ap.api.fpjs.io https://fpjscdn.net https://cdn.jsdelivr.net;",
     ]
 )
 DEFAULT_PERMISSIONS_POLICY = (
@@ -135,6 +135,7 @@ async def health() -> dict:
 async def client_config() -> dict:
     return {
         "fingerprint_public_key": settings.fingerprintjs_public_key,
+        "fingerprint_region": settings.fingerprintjs_region,
         "visitor_tracking_enabled": settings.visitor_tracking_enabled,
     }
 

@@ -260,6 +260,7 @@ Response:
 - ANXEXTOR_SUPABASE_SERVICE_KEY: Supabase service role key (server-side).
 - ANXEXTOR_IPINFO_TOKEN: ipinfo.io token for geo and proxy/vpn signals.
 - ANXEXTOR_FINGERPRINTJS_PUBLIC_KEY: FingerprintJS Pro public key.
+- ANXEXTOR_FINGERPRINTJS_REGION: FingerprintJS region (us, eu, ap).
 - ANXEXTOR_IP_ENCRYPTION_KEY: Fernet key for encrypting raw IPs.
 - ANXEXTOR_IP_HASH_SALT: Salt used when hashing IPs.
 - ANXEXTOR_VISITOR_TRACKING_ENABLED: default true.

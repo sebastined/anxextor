@@ -19,6 +19,7 @@ class Settings:
     supabase_service_key: Optional[str]
     ipinfo_token: Optional[str]
     fingerprintjs_public_key: Optional[str]
+    fingerprintjs_region: Optional[str]
     ip_encryption_key: Optional[str]
     ip_hash_salt: Optional[str]
     visitor_tracking_enabled: bool
@@ -72,6 +73,7 @@ settings = Settings(
     supabase_service_key=os.getenv("ANXEXTOR_SUPABASE_SERVICE_KEY"),
     ipinfo_token=os.getenv("ANXEXTOR_IPINFO_TOKEN"),
     fingerprintjs_public_key=os.getenv("ANXEXTOR_FINGERPRINTJS_PUBLIC_KEY"),
+    fingerprintjs_region=os.getenv("ANXEXTOR_FINGERPRINTJS_REGION"),
     ip_encryption_key=os.getenv("ANXEXTOR_IP_ENCRYPTION_KEY"),
     ip_hash_salt=os.getenv("ANXEXTOR_IP_HASH_SALT"),
     visitor_tracking_enabled=_get_bool("ANXEXTOR_VISITOR_TRACKING_ENABLED", True),

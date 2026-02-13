@@ -76,15 +76,22 @@ const sanitizeResult = (data) => ({
   timing_ms: Number(data.timing_ms ?? 0),
 });
 
-const loadScript = (src) =>
-  new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = src;
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load script"));
-    document.head.appendChild(script);
-  });
+const loadFingerprintModule = async (publicKey) => {
+  const url = `https://fpjscdn.net/v3/${encodeURIComponent(publicKey)}`;
+  const module = await import(url);
+  if (module && typeof module.load === "function") {
+    return module.load;
+  }
+  if (module && module.default) {
+    if (typeof module.default.load === "function") {
+      return module.default.load;
+    }
+    if (typeof module.default === "function") {
+      return module.default;
+    }
+  }
+  return null;
+};
 
 const fetchConfig = async () => {
   try {
@@ -153,12 +160,17 @@ const initFingerprint = async () => {
   if (!publicKey) {
     return "";
   }
+  const region = sanitizeText(config.fingerprint_region || "").toLowerCase();
   try {
-    await loadScript(`https://fpjscdn.net/v3/${encodeURIComponent(publicKey)}`);
-    if (!window.FingerprintJS || typeof window.FingerprintJS.load !== "function") {
+    const loadFingerprint = await loadFingerprintModule(publicKey);
+    if (!loadFingerprint) {
       return "";
     }
-    const fp = await window.FingerprintJS.load({ token: publicKey });
+    const loadOptions = { token: publicKey };
+    if (region === "eu" || region === "ap" || region === "us") {
+      loadOptions.region = region;
+    }
+    const fp = await loadFingerprint(loadOptions);
     const result = await fp.get();
     fingerprintId = sanitizeText(result.visitorId || "");
     return fingerprintId;
