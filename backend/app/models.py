@@ -23,6 +23,9 @@ class ScanFinding(BaseModel):
     severity: str
     description: str
     recommendation: str
+    cve: Optional[str] = None
+    cvss_score: Optional[float] = None
+    reference_url: Optional[str] = None
 
 
 class ScanResult(BaseModel):
@@ -52,7 +55,10 @@ class ScanResult(BaseModel):
                             "title": "Missing Content-Security-Policy",
                             "severity": "high",
                             "description": "CSP is not present, increasing XSS risk.",
-                            "recommendation": "Add a strict Content-Security-Policy header.",
+                            "recommendation": "Implement Content-Security-Policy with restrictive directives to prevent XSS attacks. Start with 'default-src \'self\'' and explicitly allow trusted origins.",
+                            "cve": "CWE-79",
+                            "cvss_score": 6.1,
+                            "reference_url": "https://cwe.mitre.org/data/definitions/79.html",
                         }
                     ],
                     "headers": {"content-type": "text/html"},

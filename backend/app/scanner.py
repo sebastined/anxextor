@@ -27,6 +27,9 @@ def _finding(
     severity: str,
     description: str,
     recommendation: str,
+    cve: str | None = None,
+    cvss_score: float | None = None,
+    reference_url: str | None = None,
 ) -> ScanFinding:
     return ScanFinding(
         id=finding_id,
@@ -34,6 +37,9 @@ def _finding(
         severity=severity,
         description=description,
         recommendation=recommendation,
+        cve=cve,
+        cvss_score=cvss_score,
+        reference_url=reference_url,
     )
 
 
@@ -52,7 +58,10 @@ def _check_headers(
                 "Missing Content-Security-Policy",
                 "high",
                 "CSP is not present, increasing XSS risk.",
-                "Add a strict Content-Security-Policy header.",
+                "Implement Content-Security-Policy with restrictive directives to prevent XSS attacks. Start with 'default-src 'self'' and explicitly allow trusted origins. Avoid 'unsafe-inline' and 'unsafe-eval' where possible.",
+                cve="CWE-79",
+                cvss_score=6.1,
+                reference_url="https://cwe.mitre.org/data/definitions/79.html",
             )
         )
     else:
@@ -63,7 +72,10 @@ def _check_headers(
                     "CSP missing frame-ancestors",
                     "medium",
                     "CSP does not set frame-ancestors.",
-                    "Add frame-ancestors to prevent clickjacking.",
+                    "Add 'frame-ancestors 'none'' to your CSP to prevent clickjacking attacks. Use 'frame-ancestors 'self'' only if embedding within your own domain is required.",
+                    cve="CWE-1021",
+                    cvss_score=4.3,
+                    reference_url="https://cwe.mitre.org/data/definitions/1021.html",
                 )
             )
 
@@ -75,7 +87,10 @@ def _check_headers(
                 "Missing Strict-Transport-Security",
                 "medium",
                 "HSTS is not enabled.",
-                "Add Strict-Transport-Security with a long max-age.",
+                "Implement HSTS with 'Strict-Transport-Security: max-age=31536000; includeSubDomains; preload' to enforce HTTPS connections and prevent SSL stripping attacks. Consider HSTS preloading for maximum protection.",
+                cve="CWE-319",
+                cvss_score=5.9,
+                reference_url="https://cwe.mitre.org/data/definitions/319.html",
             )
         )
     elif "max-age" in hsts and "max-age=" in hsts:
@@ -109,7 +124,10 @@ def _check_headers(
                 "Missing X-Frame-Options",
                 "medium",
                 "X-Frame-Options is not present.",
-                "Add X-Frame-Options or frame-ancestors in CSP.",
+                "Set 'X-Frame-Options: DENY' to prevent clickjacking. Use 'SAMEORIGIN' only if same-origin framing is required. Modern applications should also use CSP frame-ancestors for broader browser support.",
+                cve="CWE-1021",
+                cvss_score=4.3,
+                reference_url="https://cwe.mitre.org/data/definitions/1021.html",
             )
         )
 
@@ -120,7 +138,7 @@ def _check_headers(
                 "Missing X-Content-Type-Options",
                 "low",
                 "X-Content-Type-Options is not present.",
-                "Add X-Content-Type-Options: nosniff.",
+                "Set 'X-Content-Type-Options: nosniff' to prevent MIME-sniffing vulnerabilities. This header prevents browsers from interpreting files as a different MIME type than declared.",
             )
         )
 
@@ -132,7 +150,7 @@ def _check_headers(
                 "Missing Referrer-Policy",
                 "low",
                 "Referrer-Policy is not present.",
-                "Add a Referrer-Policy header.",
+                "Implement Referrer-Policy to control referrer information leakage. Recommended: 'strict-origin-when-cross-origin' balances functionality and privacy. Use 'no-referrer' for maximum privacy.",
             )
         )
     else:
@@ -159,7 +177,7 @@ def _check_headers(
                 "Missing Permissions-Policy",
                 "low",
                 "Permissions-Policy is not present.",
-                "Define Permissions-Policy to limit browser features.",
+                "Define Permissions-Policy to control browser feature access (camera, microphone, geolocation, etc.). Deny all features by default and explicitly allow only those required: 'camera=(), microphone=(), geolocation=()'.",
             )
         )
 
@@ -252,18 +270,18 @@ def _cookie_findings(set_cookies: List[str], is_https: bool) -> List[ScanFinding
                     "SameSite=None without Secure",
                     "high",
                     f"Cookie {name} sets SameSite=None without Secure.",
-                    "Add Secure when SameSite=None is used.",
-                )
-            )
-
-    if not is_https:
-        findings.append(
-            _finding(
+                "Cookies with SameSite=None MUST include the Secure attribute to prevent CSRF attacks. This is a browser requirement for cross-site cookie usage. Ensure all such cookies are transmitted only over HTTPS.",
+                cve="CWE-352",
+                cvss_score=8.8,
+                reference_url="https://cwe.mitre.org/data/definitions/352.html",
                 "cookies_over_http",
                 "Cookies set over HTTP",
                 "medium",
                 "Cookies were set on a non-HTTPS response.",
-                "Serve cookies only over HTTPS.",
+                "Serve all cookies exclusively over HTTPS to prevent session hijacking and credential theft. Configure your server to redirect HTTP traffic to HTTPS and enable HSTS.",
+                cve="CWE-614",
+                cvss_score=5.9,
+                reference_url="https://cwe.mitre.org/data/definitions/614.html",
             )
         )
 
@@ -274,7 +292,10 @@ def _cookie_findings(set_cookies: List[str], is_https: bool) -> List[ScanFinding
                 "Cookies missing Secure flag",
                 "medium",
                 f"Cookies without Secure: {', '.join(missing_secure)}.",
-                "Add the Secure flag to all cookies on HTTPS.",
+                "Add the Secure attribute to all session and authentication cookies to ensure they are only transmitted over encrypted HTTPS connections. This prevents cookie theft via man-in-the-middle attacks.",
+                cve="CWE-614",
+                cvss_score=5.9,
+                reference_url="https://cwe.mitre.org/data/definitions/614.html",
             )
         )
 
@@ -285,7 +306,7 @@ def _cookie_findings(set_cookies: List[str], is_https: bool) -> List[ScanFinding
                 "Cookies missing HttpOnly flag",
                 "low",
                 f"Cookies without HttpOnly: {', '.join(missing_httponly)}.",
-                "Add HttpOnly to cookies not used by client-side JS.",
+                "Add the HttpOnly attribute to session and authentication cookies to prevent XSS-based cookie theft. Only client-side accessible cookies (e.g., preference cookies) should omit this flag.",
             )
         )
 
@@ -296,7 +317,7 @@ def _cookie_findings(set_cookies: List[str], is_https: bool) -> List[ScanFinding
                 "Cookies missing SameSite",
                 "low",
                 f"Cookies without SameSite: {', '.join(missing_samesite)}.",
-                "Set SameSite=Lax or Strict for most cookies.",
+                "Set SameSite attribute to prevent CSRF attacks. Use 'SameSite=Lax' for most cookies, 'SameSite=Strict' for highly sensitive operations, or 'SameSite=None; Secure' only when cross-site access is required.",
             )
         )
 
@@ -348,7 +369,10 @@ def _cache_findings(headers: Dict[str, str]) -> List[ScanFinding]:
                 "Cache-Control is public",
                 "medium",
                 "Response is marked as public cacheable.",
-                "Use private or no-store for sensitive responses.",
+                "Set 'Cache-Control: private' for user-specific content or 'Cache-Control: no-store' for sensitive data to prevent caching in shared caches (CDNs, proxies). Public caching can expose sensitive information.",
+                cve="CWE-524",
+                cvss_score=5.3,
+                reference_url="https://cwe.mitre.org/data/definitions/524.html",
             )
         )
     elif all(token not in cache_control for token in ["no-store", "private", "no-cache"]):
@@ -390,7 +414,10 @@ def _redirect_findings(schemes: List[str]) -> List[ScanFinding]:
                     "Redirect downgrades HTTPS to HTTP",
                     "medium",
                     "A redirect downgrades from HTTPS to HTTP.",
-                    "Avoid downgrading to HTTP in redirects.",
+                    "Never redirect from HTTPS to HTTP as this exposes users to downgrade attacks and session hijacking. Ensure all redirect chains maintain HTTPS throughout.",
+                    cve="CWE-319",
+                    cvss_score=5.9,
+                    reference_url="https://cwe.mitre.org/data/definitions/319.html",
                 )
             )
             break
@@ -459,7 +486,10 @@ def _tls_info(hostname: str) -> Tuple[Optional[Dict[str, str]], List[ScanFinding
                 "TLS handshake failed",
                 "medium",
                 "Could not complete TLS handshake.",
-                "Check TLS configuration and ensure port 443 is reachable.",
+                "Verify TLS/SSL certificate validity, ensure TLS 1.2+ is enabled, check firewall rules for port 443, and validate cipher suite compatibility. Consider using Mozilla SSL Configuration Generator for secure defaults.",
+                cve="CWE-295",
+                cvss_score=7.4,
+                reference_url="https://cwe.mitre.org/data/definitions/295.html",
             )
         )
         return None, findings
@@ -524,7 +554,7 @@ def _dns_findings(domain: str, records: Dict[str, bool]) -> List[ScanFinding]:
                 "Missing SPF record",
                 "low",
                 "No SPF record detected.",
-                "Add a v=spf1 TXT record to authorize senders.",
+                "Add an SPF TXT record to specify authorized mail servers: 'v=spf1 include:_spf.google.com ~all' (adjust for your provider). This helps prevent email spoofing.",
             )
         )
 
@@ -535,7 +565,10 @@ def _dns_findings(domain: str, records: Dict[str, bool]) -> List[ScanFinding]:
                 "Missing DMARC policy",
                 "medium",
                 "No DMARC policy detected.",
-                "Add a DMARC TXT record to enforce email policy.",
+                "Implement DMARC by adding a TXT record at '_dmarc.yourdomain.com' with policy 'v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@yourdomain.com' to prevent email spoofing and phishing attacks.",
+                cve="CWE-345",
+                cvss_score=5.3,
+                reference_url="https://cwe.mitre.org/data/definitions/345.html",
             )
         )
 
@@ -546,7 +579,7 @@ def _dns_findings(domain: str, records: Dict[str, bool]) -> List[ScanFinding]:
                 "Missing CAA record",
                 "low",
                 "No CAA record detected.",
-                "Add a CAA record to restrict certificate issuers.",
+                "Add CAA DNS records to restrict which Certificate Authorities can issue certificates for your domain: '0 issue "letsencrypt.org"'. This prevents unauthorized certificate issuance.",
             )
         )
 

@@ -59,6 +59,9 @@ const sanitizeFinding = (finding) => ({
   severity: sanitizeText(finding.severity),
   description: sanitizeText(finding.description),
   recommendation: sanitizeText(finding.recommendation),
+  cve: finding.cve ? sanitizeText(finding.cve) : null,
+  cvss_score: finding.cvss_score ? Number(finding.cvss_score) : null,
+  reference_url: finding.reference_url ? sanitizeText(finding.reference_url) : null,
 });
 
 const sanitizeResult = (data) => ({
@@ -341,6 +344,22 @@ const renderFindings = (items) => {
 
     li.classList.add(sanitizeText(finding.severity));
     title.textContent = sanitizeText(finding.title);
+    
+    // Add CVE/CVSS badge if available
+    if (finding.cve || finding.cvss_score) {
+      const badge = document.createElement("span");
+      badge.style.cssText = "font-size: 11px; margin-left: 8px; padding: 2px 6px; background: #333; color: #fff; border-radius: 3px; font-family: monospace;";
+      let badgeText = "";
+      if (finding.cve) {
+        badgeText = sanitizeText(finding.cve);
+      }
+      if (finding.cvss_score) {
+        badgeText += (badgeText ? " | " : "") + `CVSS: ${finding.cvss_score}`;
+      }
+      badge.textContent = badgeText;
+      title.appendChild(badge);
+    }
+    
     description.textContent = sanitizeText(finding.description);
     recommendation.textContent = sanitizeText(finding.recommendation);
 
@@ -349,6 +368,17 @@ const renderFindings = (items) => {
     li.appendChild(description);
     li.appendChild(document.createElement("br"));
     li.appendChild(recommendation);
+    
+    // Add reference link if available
+    if (finding.reference_url) {
+      const refLink = document.createElement("a");
+      refLink.href = sanitizeText(finding.reference_url);
+      refLink.target = "_blank";
+      refLink.rel = "noopener noreferrer";
+      refLink.textContent = " Learn more »";
+      refLink.style.cssText = "color: #0066cc; text-decoration: none; font-size: 12px; margin-left: 5px;";
+      li.appendChild(refLink);
+    }
 
     findingsEl.appendChild(li);
   });
@@ -495,7 +525,15 @@ copyBtn.addEventListener("click", async () => {
     return;
   }
   try {
-    await navigator.clipboard.writeText(JSON.stringify(lastResult, null, 2));
+    const reportData = {
+      ...lastResult,
+      report_metadata: {
+        generated_at: new Date().toISOString(),
+        generated_by: "anxextor Security Scanner",
+        consultant_contact: "iam@sebastine.com",
+      },
+    };
+    await navigator.clipboard.writeText(JSON.stringify(reportData, null, 2));
     statusEl.textContent = "JSON copied to clipboard.";
   } catch (error) {
     statusEl.textContent = "Copy failed.";
@@ -507,7 +545,15 @@ downloadBtn.addEventListener("click", () => {
     return;
   }
   const safeResult = sanitizeResult(lastResult);
-  const blob = new Blob([JSON.stringify(safeResult, null, 2)], {
+  const reportData = {
+    ...safeResult,
+    report_metadata: {
+      generated_at: new Date().toISOString(),
+      generated_by: "anxextor Security Scanner",
+      consultant_contact: "iam@sebastine.com",
+    },
+  };
+  const blob = new Blob([JSON.stringify(reportData, null, 2)], {
     type: "application/json",
   });
   const url = URL.createObjectURL(blob);
@@ -529,14 +575,25 @@ csvBtn.addEventListener("click", () => {
   }
   const safeResult = sanitizeResult(lastResult);
   const rows = [
-    ["id", "title", "severity", "description", "recommendation"],
+    ["id", "title", "severity", "cve", "cvss_score", "description", "recommendation", "reference_url"],
     ...safeResult.findings.map((finding) => [
       sanitizeText(finding.id),
       sanitizeText(finding.title),
       sanitizeText(finding.severity),
+      sanitizeText(finding.cve || "N/A"),
+      sanitizeText(finding.cvss_score || "N/A"),
       sanitizeText(finding.description),
       sanitizeText(finding.recommendation),
+      sanitizeText(finding.reference_url || "N/A"),
     ]),
+    [],
+    ["Report Metadata"],
+    ["Generated At", new Date().toISOString()],
+    ["Target", sanitizeText(safeResult.final_url)],
+    ["Score", safeResult.score],
+    ["Grade", sanitizeText(safeResult.grade)],
+    [],
+    ["For security consultation, contact: iam@sebastine.com"],
   ];
 
   const csv = rows
@@ -573,47 +630,161 @@ pdfBtn.addEventListener("click", () => {
   }
 
   const doc = printWindow.document;
-  doc.title = "anxextor scan report";
+  doc.title = "anxextor Security Assessment Report";
   const body = doc.body;
 
+  // Add professional styling
+  const style = doc.createElement("style");
+  style.textContent = `
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; color: #333; line-height: 1.6; }
+    .header { border-bottom: 3px solid #0066cc; padding-bottom: 20px; margin-bottom: 30px; }
+    .header h1 { margin: 0; color: #0066cc; font-size: 28px; }
+    .header .subtitle { color: #666; font-size: 14px; margin-top: 5px; }
+    .meta-box { background: #f5f5f5; padding: 15px; border-left: 4px solid #0066cc; margin: 20px 0; }
+    .meta-box p { margin: 5px 0; }
+    .score-section { margin: 20px 0; }
+    .score-badge { display: inline-block; padding: 10px 20px; border-radius: 5px; font-weight: bold; font-size: 20px; }
+    .grade-A, .grade-B { background: #28a745; color: white; }
+    .grade-C { background: #ffc107; color: #333; }
+    .grade-D { background: #fd7e14; color: white; }
+    .grade-F { background: #dc3545; color: white; }
+    .findings-list { counter-reset: finding-counter; list-style: none; padding: 0; }
+    .findings-list li { counter-increment: finding-counter; margin-bottom: 25px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; page-break-inside: avoid; }
+    .findings-list li:before { content: counter(finding-counter) ". "; font-weight: bold; color: #0066cc; }
+    .severity { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-left: 10px; }
+    .severity-high { background: #dc3545; color: white; }
+    .severity-medium { background: #ffc107; color: #333; }
+    .severity-low { background: #17a2b8; color: white; }
+    .severity-info { background: #6c757d; color: white; }
+    .finding-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; }
+    .cvss-badge { display: inline-block; padding: 2px 6px; background: #343a40; color: white; border-radius: 3px; font-size: 11px; margin-left: 8px; }
+    .finding-detail { margin-top: 8px; color: #555; }
+    .finding-detail strong { color: #333; }
+    .cve-link { color: #0066cc; text-decoration: none; font-family: monospace; }
+    .remediation-section { margin-top: 30px; }
+    .remediation-section h2 { color: #0066cc; border-bottom: 2px solid #0066cc; padding-bottom: 10px; }
+    .remediation-list { padding-left: 20px; }
+    .remediation-list li { margin-bottom: 15px; }
+    .footer { margin-top: 50px; padding-top: 20px; border-top: 2px solid #ddd; text-align: center; color: #666; font-size: 12px; }
+    .footer .email { color: #0066cc; font-weight: bold; font-size: 14px; }
+    @media print { body { margin: 20px; } .findings-list li { page-break-inside: avoid; } }
+  `;
+  doc.head.appendChild(style);
+
+  // Header
+  const header = doc.createElement("div");
+  header.className = "header";
   const heading = doc.createElement("h1");
-  heading.textContent = "anxextor scan report";
-  body.appendChild(heading);
+  heading.textContent = "Security Assessment Report";
+  header.appendChild(heading);
+  const subtitle = doc.createElement("div");
+  subtitle.className = "subtitle";
+  subtitle.textContent = "Generated by anxextor - Web Security Scanner";
+  header.appendChild(subtitle);
+  body.appendChild(header);
 
-  const meta = doc.createElement("p");
-  meta.textContent = `Target: ${sanitizeText(safeResult.final_url)} | Score: ${safeResult.score} | Grade: ${sanitizeText(safeResult.grade)}`;
-  body.appendChild(meta);
+  // Scan metadata
+  const metaBox = doc.createElement("div");
+  metaBox.className = "meta-box";
+  const targetInfo = doc.createElement("p");
+  targetInfo.innerHTML = `<strong>Target:</strong> ${sanitizeText(safeResult.final_url)}`;
+  metaBox.appendChild(targetInfo);
+  const dateInfo = doc.createElement("p");
+  dateInfo.innerHTML = `<strong>Scan Date:</strong> ${new Date().toLocaleString()}`;
+  metaBox.appendChild(dateInfo);
+  const timingInfo = doc.createElement("p");
+  timingInfo.innerHTML = `<strong>Scan Duration:</strong> ${safeResult.timing_ms} ms`;
+  metaBox.appendChild(timingInfo);
+  body.appendChild(metaBox);
 
-  const listTitle = doc.createElement("h2");
-  listTitle.textContent = "Findings";
-  body.appendChild(listTitle);
+  // Score section
+  const scoreSection = doc.createElement("div");
+  scoreSection.className = "score-section";
+  const scoreHeading = doc.createElement("h2");
+  scoreHeading.textContent = "Security Score";
+  scoreSection.appendChild(scoreHeading);
+  const scoreBadge = doc.createElement("span");
+  scoreBadge.className = `score-badge grade-${sanitizeText(safeResult.grade)}`;
+  scoreBadge.textContent = `Score: ${safeResult.score}/100 | Grade: ${sanitizeText(safeResult.grade)}`;
+  scoreSection.appendChild(scoreBadge);
+  body.appendChild(scoreSection);
 
-  const list = doc.createElement("ol");
+  // Findings
+  const findingsTitle = doc.createElement("h2");
+  findingsTitle.textContent = `Findings (${safeResult.findings.length})`;
+  findingsTitle.style.marginTop = "30px";
+  body.appendChild(findingsTitle);
+
+  const findingsList = doc.createElement("ol");
+  findingsList.className = "findings-list";
   safeResult.findings.forEach((finding) => {
     const li = doc.createElement("li");
-    const severity = sanitizeText(finding.severity).toUpperCase();
-    const title = sanitizeText(finding.title);
-    const rec = sanitizeText(finding.recommendation);
-    li.textContent = `${severity}: ${title} - ${rec}`;
-    list.appendChild(li);
+    
+    const titleDiv = doc.createElement("div");
+    titleDiv.className = "finding-title";
+    const severitySpan = doc.createElement("span");
+    severitySpan.className = `severity severity-${sanitizeText(finding.severity).toLowerCase()}`;
+    severitySpan.textContent = sanitizeText(finding.severity).toUpperCase();
+    titleDiv.textContent = sanitizeText(finding.title);
+    titleDiv.appendChild(severitySpan);
+    
+    if (finding.cvss_score) {
+      const cvssSpan = doc.createElement("span");
+      cvssSpan.className = "cvss-badge";
+      cvssSpan.textContent = `CVSS: ${finding.cvss_score}`;
+      titleDiv.appendChild(cvssSpan);
+    }
+    
+    li.appendChild(titleDiv);
+    
+    const descDiv = doc.createElement("div");
+    descDiv.className = "finding-detail";
+    descDiv.innerHTML = `<strong>Description:</strong> ${sanitizeText(finding.description)}`;
+    li.appendChild(descDiv);
+    
+    if (finding.cve) {
+      const cveDiv = doc.createElement("div");
+      cveDiv.className = "finding-detail";
+      const cveLabel = doc.createElement("strong");
+      cveLabel.textContent = "Reference: ";
+      cveDiv.appendChild(cveLabel);
+      const cveLink = doc.createElement("a");
+      cveLink.className = "cve-link";
+      cveLink.href = sanitizeText(finding.reference_url || `https://cwe.mitre.org/data/definitions/${finding.cve.split('-')[1]}.html`);
+      cveLink.textContent = sanitizeText(finding.cve);
+      cveLink.target = "_blank";
+      cveDiv.appendChild(cveLink);
+      li.appendChild(cveDiv);
+    }
+    
+    const recDiv = doc.createElement("div");
+    recDiv.className = "finding-detail";
+    recDiv.innerHTML = `<strong>Remediation:</strong> ${sanitizeText(finding.recommendation)}`;
+    li.appendChild(recDiv);
+    
+    findingsList.appendChild(li);
   });
-  body.appendChild(list);
+  body.appendChild(findingsList);
 
-  const remediationTitle = doc.createElement("h2");
-  remediationTitle.textContent = "Remediation";
-  body.appendChild(remediationTitle);
-
-  const remList = doc.createElement("ol");
-  remediationEl.childNodes.forEach((node) => {
-    const li = doc.createElement("li");
-    li.textContent = sanitizeText(node.textContent || "");
-    remList.appendChild(li);
-  });
-  body.appendChild(remList);
+  // Footer with consultant info
+  const footer = doc.createElement("div");
+  footer.className = "footer";
+  const footerText = doc.createElement("p");
+  footerText.textContent = "For security consultation and remediation assistance, contact:";
+  footer.appendChild(footerText);
+  const emailDiv = doc.createElement("div");
+  emailDiv.className = "email";
+  emailDiv.textContent = "iam@sebastine.com";
+  footer.appendChild(emailDiv);
+  const disclaimer = doc.createElement("p");
+  disclaimer.style.marginTop = "15px";
+  disclaimer.textContent = "This report is generated automatically and should be reviewed by security professionals.";
+  footer.appendChild(disclaimer);
+  body.appendChild(footer);
 
   doc.close();
   printWindow.focus();
-  printWindow.print();
+  setTimeout(() => printWindow.print(), 250);
 });
 
 const setTheme = (theme) => {
