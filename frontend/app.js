@@ -683,9 +683,9 @@ pdfBtn.addEventListener("click", () => {
     .finding-item { margin-bottom: 30px; page-break-inside: avoid; border: 1px solid #e0e0e0; padding: 15px; background: #fafafa; }
     
     /* Finding Header */
-    .finding-header { display: table; width: 100%; margin-bottom: 10px; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; }
-    .finding-number { display: table-cell; font-weight: bold; color: #1976d2; vertical-align: top; width: 40px; }
-    .finding-title-cell { display: table-cell; vertical-align: top; padding-left: 10px; }
+    .finding-header { margin-bottom: 10px; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; }
+    .finding-number { font-weight: bold; color: #1976d2; display: inline; }
+    .finding-title-cell { }
     .finding-title { font-weight: bold; font-size: 12pt; color: #1f1f1f; margin-bottom: 5px; }
     .finding-badges { display: inline-block; }
     .finding-badges .badge { display: inline-block; margin-right: 10px; padding: 3px 8px; border-radius: 3px; font-size: 9pt; font-weight: bold; }
@@ -830,17 +830,17 @@ pdfBtn.addEventListener("click", () => {
     const header = doc.createElement("div");
     header.className = "finding-header";
     
-    const number = doc.createElement("div");
-    number.className = "finding-number";
-    number.textContent = `${index + 1}.`;
-    header.appendChild(number);
-    
     const titleCell = doc.createElement("div");
     titleCell.className = "finding-title-cell";
     
     const title = doc.createElement("div");
     title.className = "finding-title";
-    title.textContent = sanitizeText(finding.title);
+    const number = doc.createElement("span");
+    number.className = "finding-number";
+    number.textContent = `${index + 1}. `;
+    title.appendChild(number);
+    const titleText = doc.createTextNode(sanitizeText(finding.title));
+    title.appendChild(titleText);
     titleCell.appendChild(title);
     
     // Badges
