@@ -17,6 +17,7 @@ from .rate_limit import RateLimiter
 from .config import settings
 from .visitors import track_visit
 from .feedback import get_feedback_summary, record_feedback
+from .pdf_generator import generate_pdf_report
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = ROOT_DIR / "frontend"
@@ -268,3 +269,24 @@ async def scan_batch_endpoint(payload: BatchScanRequest, request: Request) -> Ba
             results.append(result)
 
     return BatchScanResult(results=results, errors=errors)
+
+
+@app.post(
+    "/api/export-pdf",
+    responses={
+        400: {"description": "Bad request"},
+        401: {"description": "Unauthorized"},
+    },
+)
+async def export_pdf_endpoint(payload: ScanResult, request: Request) -> Response:
+    require_api_key(request)
+    try:
+        pdf_bytes = await asyncio.to_thread(generate_pdf_report, payload.model_dump())
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=security-assessment.pdf"},
+        )
+    except Exception as e:
+        logger.error(f"PDF generation error: {e}")
+        raise HTTPException(status_code=400, detail=f"PDF generation failed: {str(e)}")
