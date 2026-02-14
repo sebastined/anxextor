@@ -23,6 +23,7 @@ class Settings:
     ip_encryption_key: Optional[str]
     ip_hash_salt: Optional[str]
     visitor_tracking_enabled: bool
+    google_client_id: Optional[str]
 
 
 def _get_int(name: str, default: int) -> int:
@@ -77,4 +78,5 @@ settings = Settings(
     ip_encryption_key=os.getenv("ANXEXTOR_IP_ENCRYPTION_KEY"),
     ip_hash_salt=os.getenv("ANXEXTOR_IP_HASH_SALT"),
     visitor_tracking_enabled=_get_bool("ANXEXTOR_VISITOR_TRACKING_ENABLED", True),
+    google_client_id=os.getenv("GOOGLE_CLIENT_ID"),
 )

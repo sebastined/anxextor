@@ -33,6 +33,7 @@ const feedbackModal = document.getElementById("feedback-modal");
 const feedbackModalUp = document.getElementById("feedback-modal-up");
 const feedbackModalDown = document.getElementById("feedback-modal-down");
 const feedbackModalClose = document.getElementById("feedback-modal-close");
+const authNavEl = document.getElementById("auth-nav");
 
 const THEME_KEY = "anxextor.theme";
 const FEEDBACK_KEY = "anxextor.feedback";
@@ -42,6 +43,44 @@ let lastResult = null;
 let lastBatch = [];
 let fingerprintId = "";
 const historyEntries = [];
+let currentUser = null;
+
+// Auth helper functions
+function getAuthToken() {
+  return localStorage.getItem('access_token');
+}
+
+function isAuthenticated() {
+  return !!getAuthToken();
+}
+
+function getCurrentUser() {
+  const userStr = localStorage.getItem('user');
+  return userStr ? JSON.parse(userStr) : null;
+}
+
+function initAuthUI() {
+  if (!authNavEl) return;
+  
+  if (isAuthenticated()) {
+    const user = getCurrentUser();
+    const displayName = user?.full_name || user?.email?.split('@')[0] || 'User';
+    const profilePic = user?.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=1976d2&color=fff&size=32`;
+    
+    authNavEl.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.1); padding: 8px 15px; border-radius: 20px;">
+        <img src="${profilePic}" alt="Profile" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid white;">
+        <a href="/static/profile.html" style="color: white; text-decoration: none; font-weight: 500;">${displayName}</a>
+      </div>
+    `;
+  } else {
+    authNavEl.innerHTML = `
+      <a href="/static/auth.html" class="btn-3d" style="padding: 8px 16px; font-size: 14px;">
+        🔐 Login
+      </a>
+    `;
+  }
+}
 
 const sanitizeText = (value) => {
   if (typeof DOMPurify !== "undefined") {
@@ -618,10 +657,23 @@ pdfBtn.addEventListener("click", async () => {
     return;
   }
   
+  // Check authentication
+  const token = getAuthToken();
+  if (!token) {
+    statusEl.textContent = "⚠️ Please login to export PDF reports";
+    if (confirm("You need to login to export PDF reports. Go to login page?")) {
+      window.location.href = "/static/auth.html";
+    }
+    return;
+  }
+  
   statusEl.textContent = "Generating PDF report...";
   
   try {
-    const headers = { "Content-Type": "application/json" };
+    const headers = { 
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    };
     if (fingerprintId) {
       headers["x-fingerprint-id"] = fingerprintId;
     }
@@ -631,6 +683,14 @@ pdfBtn.addEventListener("click", async () => {
       headers,
       body: JSON.stringify(lastResult),
     });
+    
+    if (response.status === 401) {
+      statusEl.textContent = "❌ Authentication expired. Please login again.";
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user');
+      initAuthUI();
+      return;
+    }
     
     if (!response.ok) {
       statusEl.textContent = `PDF generation failed: ${response.statusText}`;
@@ -646,7 +706,7 @@ pdfBtn.addEventListener("click", async () => {
     link.click();
     URL.revokeObjectURL(url);
     
-    statusEl.textContent = "PDF exported successfully!";
+    statusEl.textContent = "✅ PDF exported successfully!";
   } catch (error) {
     statusEl.textContent = `PDF export error: ${error.message}`;
     console.error("PDF export error:", error);
@@ -752,6 +812,7 @@ const bootstrap = async () => {
   }
   await fetchFeedbackSummary();
   scheduleFeedbackPopup();
+  initAuthUI();  // Initialize authentication UI
 };
 
 bootstrap();

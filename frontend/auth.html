@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - anxextor Security Scanner</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        .auth-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1a237e 0%, #1976d2 100%);
+            padding: 20px;
+        }
+        
+        .auth-card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            max-width: 420px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .auth-card h1 {
+            color: #1a237e;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .auth-card p {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        #google-signin-button {
+            margin: 20px auto;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .features {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #eee;
+            text-align: left;
+        }
+        
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            color: #555;
+        }
+        
+        .feature-item svg {
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #1976d2;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        
+        .loading {
+            display: none;
+            margin: 20px auto;
+            color: #1976d2;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <h1>🔒 Welcome to anxextor</h1>
+            <p>Sign in with your Google account to access premium features</p>
+            
+            <div id="google-signin-button"></div>
+            <div class="loading" id="loading">Signing you in...</div>
+            
+            <div class="features">
+                <div class="feature-item">
+                    <svg width="20" height="20" fill="#4caf50" viewBox="0 0 20 20">
+                        <path d="M10 0C4.48 0 0 4.48 0 10s4.48 10 10 10 10-4.48 10-10S15.52 0 10 0zm-2 15l-5-5 1.41-1.41L8 12.17l7.59-7.59L17 6l-9 9z"/>
+                    </svg>
+                    <span>Export professional PDF reports</span>
+                </div>
+                <div class="feature-item">
+                    <svg width="20" height="20" fill="#4caf50" viewBox="0 0 20 20">
+                        <path d="M10 0C4.48 0 0 4.48 0 10s4.48 10 10 10 10-4.48 10-10S15.52 0 10 0zm-2 15l-5-5 1.41-1.41L8 12.17l7.59-7.59L17 6l-9 9z"/>
+                    </svg>
+                    <span>Track your scan history</span>
+                </div>
+                <div class="feature-item">
+                    <svg width="20" height="20" fill="#4caf50" viewBox="0 0 20 20">
+                        <path d="M10 0C4.48 0 0 4.48 0 10s4.48 10 10 10 10-4.48 10-10S15.52 0 10 0zm-2 15l-5-5 1.41-1.41L8 12.17l7.59-7.59L17 6l-9 9z"/>
+                    </svg>
+                    <span>Access advanced security insights</span>
+                </div>
+            </div>
+            
+            <a href="/" class="back-link">← Back to scanner</a>
+        </div>
+    </div>
+
+    <script>
+        let googleClientId = null;
+
+        // Fetch config and initialize Google Sign-In
+        async function initAuth() {
+            try {
+                const response = await fetch('/api/config');
+                const config = await response.json();
+                googleClientId = config.google_client_id;
+
+                if (!googleClientId) {
+                    console.error('Google Client ID not configured');
+                    document.getElementById('google-signin-button').innerHTML = 
+                        '<p style="color: red;">Google Sign-In not configured. Please contact administrator.</p>';
+                    return;
+                }
+
+                // Initialize Google Sign-In
+                google.accounts.id.initialize({
+                    client_id: googleClientId,
+                    callback: handleCredentialResponse,
+                    auto_select: false,
+                });
+
+                // Render the Google Sign-In button
+                google.accounts.id.renderButton(
+                    document.getElementById('google-signin-button'),
+                    { 
+                        theme: 'outline', 
+                        size: 'large',
+                        width: 300,
+                        text: 'signin_with',
+                        shape: 'rectangular',
+                    }
+                );
+            } catch (error) {
+                console.error('Failed to load config:', error);
+            }
+        }
+
+        // Handle Google Sign-In response
+        async function handleCredentialResponse(response) {
+            const loading = document.getElementById('loading');
+            loading.style.display = 'block';
+
+            try {
+                // Send credential to backend
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        credential: response.credential
+                    })
+                });
+
+                if (!res.ok) {
+                    throw new Error('Authentication failed');
+                }
+
+                const data = await res.json();
+                
+                // Store access token
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('user', JSON.stringify(data.user));
+
+                // Redirect to home page
+                window.location.href = '/';
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Authentication failed. Please try again.');
+                loading.style.display = 'none';
+            }
+        }
+
+        // Check if already logged in
+        if (localStorage.getItem('access_token')) {
+            window.location.href = '/';
+        } else {
+            // Initialize when page loads
+            window.onload = initAuth;
+        }
+    </script>
+</body>
+</html>

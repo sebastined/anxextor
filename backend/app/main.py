@@ -5,10 +5,12 @@ import time
 from pathlib import Path
 from uuid import uuid4
 import asyncio
+from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response, Header, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from .models import BatchScanRequest, BatchScanResult, FeedbackRequest, ScanRequest, ScanResult
 from .scanner import safe_scan
@@ -18,6 +20,13 @@ from .config import settings
 from .visitors import track_visit
 from .feedback import get_feedback_summary, record_feedback
 from .pdf_generator import generate_pdf_report
+from .user_models import GoogleAuthRequest, UserResponse
+from .user_service import (
+    authenticate_with_google,
+    get_user_by_id, 
+    decode_access_token,
+    increment_scan_count
+)
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIR = ROOT_DIR / "frontend"
@@ -28,6 +37,7 @@ logging.basicConfig(level=log_level)
 app = FastAPI(title="anxextor", version="0.1.0")
 logger = logging.getLogger("anxextor")
 limiter = RateLimiter(limit_per_minute=settings.rate_limit_per_minute)
+security = HTTPBearer(auto_error=False)
 
 DEFAULT_CSP = " ".join(
     [
@@ -134,10 +144,12 @@ async def health() -> dict:
 
 @app.get("/api/config")
 async def client_config() -> dict:
+    """Get client configuration including Google Client ID"""
     return {
         "fingerprint_public_key": settings.fingerprintjs_public_key,
         "fingerprint_region": settings.fingerprintjs_region,
         "visitor_tracking_enabled": settings.visitor_tracking_enabled,
+        "google_client_id": settings.google_client_id,
     }
 
 
@@ -271,16 +283,83 @@ async def scan_batch_endpoint(payload: BatchScanRequest, request: Request) -> Ba
     return BatchScanResult(results=results, errors=errors)
 
 
+# Authentication helper
+async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Optional[UserResponse]:
+    """Get current authenticated user from JWT token"""
+    if not credentials:
+        return None
+    
+    token_data = decode_access_token(credentials.credentials)
+    if not token_data or "sub" not in token_data:
+        return None
+    
+    user = await get_user_by_id(token_data["sub"])
+    return user
+
+
+async def require_auth(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> UserResponse:
+    """Require authenticated user"""
+    user = await get_current_user(credentials)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required"
+        )
+    return user
+
+
+@app.post("/api/auth/register", response_model=UserResponse)
+async def register_endpoint(user_data: GoogleAuthRequest):
+    """Authenticate with Google (auto-register if new user)"""
+    token_response = await authenticate_with_google(user_data)
+    return token_response
+
+
+@app.post("/api/auth/login")
+async def login_endpoint(login_data: GoogleAuthRequest):
+    """Login with Google and get access token"""
+    return await authenticate_with_google(login_data)
+
+
+@app.get("/api/auth/me", response_model=UserResponse)
+async def current_user_endpoint(current_user: UserResponse = Depends(require_auth)) -> UserResponse:
+    """Get current user profile"""
+    return current_user
+
+
+@app.post("/api/auth/logout")
+async def logout_endpoint(current_user: UserResponse = Depends(require_auth)) -> dict:
+    """Logout (client should discard token)"""
+    return {"message": "Logged out successfully"}
+
+
+@app.get("/api/config")
+async def client_config_with_auth() -> dict:
+    """Get client configuration including Google Client ID"""
+    return {
+        "fingerprint_public_key": settings.fingerprintjs_public_key,
+        "fingerprint_region": settings.fingerprintjs_region,
+        "visitor_tracking_enabled": settings.visitor_tracking_enabled,
+        "google_client_id": settings.google_client_id,
+    }
+
+
 @app.post(
     "/api/export-pdf",
     responses={
         400: {"description": "Bad request"},
-        401: {"description": "Unauthorized"},
+        401: {"description": "Unauthorized - Login required"},
     },
 )
-async def export_pdf_endpoint(payload: ScanResult, request: Request) -> Response:
-    require_api_key(request)
+async def export_pdf_endpoint(
+    payload: ScanResult, 
+    current_user: UserResponse = Depends(require_auth)
+) -> Response:
+    """Export scan results to PDF (requires authentication)"""
     try:
+        # Increment user's scan count
+        await increment_scan_count(current_user.id)
+        
         pdf_bytes = await asyncio.to_thread(generate_pdf_report, payload.model_dump())
         return Response(
             content=pdf_bytes,
