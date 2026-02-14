@@ -8,5 +8,6 @@ cryptography>=42.0,<44.0
 python-dotenv>=1.0,<2.0
 reportlab>=4.0,<5.0
 matplotlib>=3.8,<4.0
-requests>=2.31,<3.0python-jose[cryptography]>=3.3,<4.0
+requests>=2.31,<3.0
+python-jose[cryptography]>=3.3,<4.0
 google-auth>=2.28,<3.0

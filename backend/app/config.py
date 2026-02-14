@@ -24,6 +24,8 @@ class Settings:
     ip_hash_salt: Optional[str]
     visitor_tracking_enabled: bool
     google_client_id: Optional[str]
+    github_client_id: Optional[str]
+    github_client_secret: Optional[str]
 
 
 def _get_int(name: str, default: int) -> int:
@@ -79,4 +81,6 @@ settings = Settings(
     ip_hash_salt=os.getenv("ANXEXTOR_IP_HASH_SALT"),
     visitor_tracking_enabled=_get_bool("ANXEXTOR_VISITOR_TRACKING_ENABLED", True),
     google_client_id=os.getenv("GOOGLE_CLIENT_ID"),
+    github_client_id=os.getenv("GITHUB_CLIENT_ID"),
+    github_client_secret=os.getenv("GITHUB_CLIENT_SECRET"),
 )

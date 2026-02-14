@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authenticating... - anxextor</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .callback-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1a237e 0%, #1976d2 100%);
+        }
+        
+        .callback-card {
+            background: white;
+            padding: 60px 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #1976d2;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        h2 {
+            color: #1a237e;
+            margin: 0;
+        }
+        
+        p {
+            color: #666;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="callback-container">
+        <div class="callback-card">
+            <div class="spinner"></div>
+            <h2>Authenticating...</h2>
+            <p>Please wait while we complete your sign-in</p>
+        </div>
+    </div>
+
+    <script>
+        async function handleGitHubCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const state = urlParams.get('state');
+            const storedState = sessionStorage.getItem('github_oauth_state');
+            const error = urlParams.get('error');
+
+            if (error) {
+                alert(`GitHub authentication error: ${error}`);
+                window.location.href = '/auth.html';
+                return;
+            }
+
+            if (!code) {
+                alert('No authorization code received');
+                window.location.href = '/auth.html';
+                return;
+            }
+
+            // Verify state for CSRF protection
+            if (state !== storedState) {
+                alert('Invalid state parameter. Please try again.');
+                window.location.href = '/auth.html';
+                return;
+            }
+
+            sessionStorage.removeItem('github_oauth_state');
+
+            try {
+                // Exchange code for access token
+                const tokenRes = await fetch('/api/auth/github/exchange-code', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ code })
+                });
+
+                if (!tokenRes.ok) {
+                    const errorData = await tokenRes.json();
+                    throw new Error(errorData.detail || 'Failed to exchange code for token');
+                }
+
+                const { access_token: githubAccessToken } = await tokenRes.json();
+
+                // Authenticate with backend
+                const authRes = await fetch('/api/auth/github/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        access_token: githubAccessToken
+                    })
+                });
+
+                if (!authRes.ok) {
+                    const errorData = await authRes.json();
+                    throw new Error(errorData.detail || 'Authentication failed');
+                }
+
+                const data = await authRes.json();
+                
+                // Store tokens
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('user', JSON.stringify(data.user));
+
+                // Redirect to home
+                window.location.href = '/';
+            } catch (error) {
+                console.error('GitHub OAuth error:', error);
+                alert(`GitHub authentication failed: ${error.message}`);
+                window.location.href = '/auth.html';
+            }
+        }
+
+        // Run on page load
+        window.onload = handleGitHubCallback;
+    </script>
+</body>
+</html>

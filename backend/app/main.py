@@ -20,9 +20,10 @@ from .config import settings
 from .visitors import track_visit
 from .feedback import get_feedback_summary, record_feedback
 from .pdf_generator import generate_pdf_report
-from .user_models import GoogleAuthRequest, UserResponse
+from .user_models import GoogleAuthRequest, GitHubAuthRequest, UserResponse
 from .user_service import (
     authenticate_with_google,
+    authenticate_with_github,
     get_user_by_id, 
     decode_access_token,
     increment_scan_count
@@ -144,12 +145,13 @@ async def health() -> dict:
 
 @app.get("/api/config")
 async def client_config() -> dict:
-    """Get client configuration including Google Client ID"""
+    """Get client configuration including OAuth Client IDs"""
     return {
         "fingerprint_public_key": settings.fingerprintjs_public_key,
         "fingerprint_region": settings.fingerprintjs_region,
         "visitor_tracking_enabled": settings.visitor_tracking_enabled,
         "google_client_id": settings.google_client_id,
+        "github_client_id": settings.github_client_id,
     }
 
 
@@ -321,6 +323,67 @@ async def login_endpoint(login_data: GoogleAuthRequest):
     return await authenticate_with_google(login_data)
 
 
+@app.post("/api/auth/github/exchange-code")
+async def github_exchange_code(request_data: dict):
+    """Exchange GitHub authorization code for access token"""
+    code = request_data.get("code")
+    
+    if not code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Authorization code required"
+        )
+    
+    if not settings.github_client_id or not settings.github_client_secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="GitHub OAuth not configured"
+        )
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # Exchange code for access token
+            token_response = await client.post(
+                "https://github.com/login/oauth/access_token",
+                headers={"Accept": "application/json"},
+                data={
+                    "client_id": settings.github_client_id,
+                    "client_secret": settings.github_client_secret,
+                    "code": code,
+                }
+            )
+            
+            if token_response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Failed to exchange code for token"
+                )
+            
+            token_data = token_response.json()
+            
+            if "error" in token_data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=token_data.get("error_description", "GitHub OAuth error")
+                )
+            
+            return {"access_token": token_data["access_token"]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"GitHub code exchange error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to authenticate with GitHub"
+        )
+
+
+@app.post("/api/auth/github/login")
+async def github_login_endpoint(login_data: GitHubAuthRequest):
+    """Login with GitHub and get access token"""
+    return await authenticate_with_github(login_data)
+
+
 @app.get("/api/auth/me", response_model=UserResponse)
 async def current_user_endpoint(current_user: UserResponse = Depends(require_auth)) -> UserResponse:
     """Get current user profile"""
@@ -331,17 +394,6 @@ async def current_user_endpoint(current_user: UserResponse = Depends(require_aut
 async def logout_endpoint(current_user: UserResponse = Depends(require_auth)) -> dict:
     """Logout (client should discard token)"""
     return {"message": "Logged out successfully"}
-
-
-@app.get("/api/config")
-async def client_config_with_auth() -> dict:
-    """Get client configuration including Google Client ID"""
-    return {
-        "fingerprint_public_key": settings.fingerprintjs_public_key,
-        "fingerprint_region": settings.fingerprintjs_region,
-        "visitor_tracking_enabled": settings.visitor_tracking_enabled,
-        "google_client_id": settings.google_client_id,
-    }
 
 
 @app.post(

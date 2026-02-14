@@ -43,6 +43,55 @@
             justify-content: center;
         }
         
+        .oauth-buttons {
+            margin: 20px 0;
+        }
+        
+        .oauth-divider {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+            color: #999;
+        }
+        
+        .oauth-divider::before,
+        .oauth-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e0e0e0;
+        }
+        
+        .oauth-divider span {
+            padding: 0 15px;
+            font-size: 14px;
+        }
+        
+        .github-signin-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #24292e;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            width: 300px;
+            margin: 10px auto;
+            transition: background 0.2s;
+        }
+        
+        .github-signin-button:hover {
+            background: #1b1f23;
+        }
+        
+        .github-signin-button svg {
+            margin-right: 10px;
+        }
+        
         .features {
             margin-top: 30px;
             padding-top: 30px;
@@ -85,9 +134,23 @@
     <div class="auth-container">
         <div class="auth-card">
             <h1>🔒 Welcome to anxextor</h1>
-            <p>Sign in with your Google account to access premium features</p>
+            <p>Sign in with your Google or GitHub account to access premium features</p>
             
-            <div id="google-signin-button"></div>
+            <div class="oauth-buttons">
+                <div id="google-signin-button"></div>
+                
+                <div class="oauth-divider">
+                    <span>OR</span>
+                </div>
+                
+                <button class="github-signin-button" id="github-signin-button">
+                    <svg height="20" width="20" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                    </svg>
+                    Continue with GitHub
+                </button>
+            </div>
+            
             <div class="loading" id="loading">Signing you in...</div>
             
             <div class="features">
@@ -117,39 +180,46 @@
 
     <script>
         let googleClientId = null;
+        let githubClientId = null;
 
-        // Fetch config and initialize Google Sign-In
+        // Fetch config and initialize OAuth
         async function initAuth() {
             try {
                 const response = await fetch('/api/config');
                 const config = await response.json();
                 googleClientId = config.google_client_id;
-
-                if (!googleClientId) {
-                    console.error('Google Client ID not configured');
-                    document.getElementById('google-signin-button').innerHTML = 
-                        '<p style="color: red;">Google Sign-In not configured. Please contact administrator.</p>';
-                    return;
-                }
+                githubClientId = config.github_client_id;
 
                 // Initialize Google Sign-In
-                google.accounts.id.initialize({
-                    client_id: googleClientId,
-                    callback: handleCredentialResponse,
-                    auto_select: false,
-                });
+                if (googleClientId) {
+                    google.accounts.id.initialize({
+                        client_id: googleClientId,
+                        callback: handleCredentialResponse,
+                        auto_select: false,
+                    });
 
-                // Render the Google Sign-In button
-                google.accounts.id.renderButton(
-                    document.getElementById('google-signin-button'),
-                    { 
-                        theme: 'outline', 
-                        size: 'large',
-                        width: 300,
-                        text: 'signin_with',
-                        shape: 'rectangular',
-                    }
-                );
+                    google.accounts.id.renderButton(
+                        document.getElementById('google-signin-button'),
+                        { 
+                            theme: 'outline', 
+                            size: 'large',
+                            width: 300,
+                            text: 'signin_with',
+                            shape: 'rectangular',
+                        }
+                    );
+                } else {
+                    document.getElementById('google-signin-button').innerHTML = 
+                        '<p style="color: red; font-size: 12px;">Google Sign-In not configured</p>';
+                }
+
+                // Initialize GitHub Sign-In
+                if (githubClientId) {
+                    document.getElementById('github-signin-button').addEventListener('click', initiateGitHubOAuth);
+                } else {
+                    document.getElementById('github-signin-button').disabled = true;
+                    document.getElementById('github-signin-button').innerHTML = 'GitHub Sign-In not configured';
+                }
             } catch (error) {
                 console.error('Failed to load config:', error);
             }
@@ -161,7 +231,6 @@
             loading.style.display = 'block';
 
             try {
-                // Send credential to backend
                 const res = await fetch('/api/auth/login', {
                     method: 'POST',
                     headers: {
@@ -178,11 +247,9 @@
 
                 const data = await res.json();
                 
-                // Store access token
                 localStorage.setItem('access_token', data.access_token);
                 localStorage.setItem('user', JSON.stringify(data.user));
 
-                // Redirect to home page
                 window.location.href = '/';
             } catch (error) {
                 console.error('Login error:', error);
@@ -191,11 +258,98 @@
             }
         }
 
+        // Initiate GitHub OAuth flow
+        function initiateGitHubOAuth() {
+            const redirectUri = `${window.location.origin}/auth-callback`;
+            const scope = 'read:user user:email';
+            const state = generateRandomState();
+            
+            // Store state for verification
+            sessionStorage.setItem('github_oauth_state', state);
+            
+            // Redirect to GitHub authorization
+            const authUrl = `https://github.com/login/oauth/authorize?client_id=${githubClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=${state}`;
+            window.location.href = authUrl;
+        }
+
+        // Generate random state for CSRF protection
+        function generateRandomState() {
+            return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        }
+
+        // Handle GitHub OAuth callback (if on callback page)
+        async function handleGitHubCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const state = urlParams.get('state');
+            const storedState = sessionStorage.getItem('github_oauth_state');
+
+            if (!code) return;
+
+            // Verify state for CSRF protection
+            if (state !== storedState) {
+                alert('Invalid state parameter. Please try again.');
+                window.location.href = '/auth.html';
+                return;
+            }
+
+            sessionStorage.removeItem('github_oauth_state');
+
+            const loading = document.getElementById('loading');
+            if (loading) loading.style.display = 'block';
+
+            try {
+                // Exchange code for access token (backend should do this)
+                const tokenRes = await fetch('/api/auth/github/exchange-code', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ code })
+                });
+
+                if (!tokenRes.ok) {
+                    throw new Error('Failed to exchange code for token');
+                }
+
+                const { access_token: githubAccessToken } = await tokenRes.json();
+
+                // Authenticate with backend
+                const authRes = await fetch('/api/auth/github/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        access_token: githubAccessToken
+                    })
+                });
+
+                if (!authRes.ok) {
+                    throw new Error('Authentication failed');
+                }
+
+                const data = await authRes.json();
+                
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('user', JSON.stringify(data.user));
+
+                window.location.href = '/';
+            } catch (error) {
+                console.error('GitHub OAuth error:', error);
+                alert('GitHub authentication failed. Please try again.');
+                window.location.href = '/auth.html';
+            }
+        }
+
         // Check if already logged in
         if (localStorage.getItem('access_token')) {
             window.location.href = '/';
+        } else if (window.location.pathname.includes('auth-callback')) {
+            // Handle GitHub callback
+            window.onload = handleGitHubCallback;
         } else {
-            // Initialize when page loads
+            // Initialize auth page
             window.onload = initAuth;
         }
     </script>

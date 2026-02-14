@@ -142,8 +142,12 @@
                 <div class="value" id="memberSince" style="font-size: 18px;">-</div>
             </div>
             <div class="stat-card">
+                <h3>Sign-In Provider</h3>
+                <div class="value" id="provider" style="font-size: 18px;">-</div>
+            </div>
+            <div class="stat-card">
                 <h3>Account Type</h3>
-                <div class="value" id="accountType" style="font-size: 18px;">Free</div>
+                <div class="value" id="accountType" style="font-size: 18px;">User</div>
             </div>
         </div>
         
@@ -189,7 +193,22 @@
                 document.getElementById('userName').textContent = user.full_name || user.email.split('@')[0];
                 document.getElementById('userEmail').textContent = user.email;
                 document.getElementById('scanCount').textContent = user.scan_count || 0;
-                document.getElementById('accountType').textContent = user.is_premium ? 'Premium ⭐' : 'Free';
+                
+                // Display provider
+                const provider = user.provider || 'google';
+                const providerIcon = provider === 'github' ? '🐙' : '🔐';
+                const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
+                document.getElementById('provider').textContent = `${providerIcon} ${providerName}`;
+                
+                // Display role
+                const role = user.role || 'user';
+                const roleMap = {
+                    'user': 'User',
+                    'manager': 'Manager 👔',
+                    'admin': 'Admin 👑',
+                    'super_admin': 'Super Admin ⚡'
+                };
+                document.getElementById('accountType').textContent = roleMap[role] || 'User';
                 
                 // Handle profile picture
                 if (user.picture) {
