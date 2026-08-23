@@ -9,32 +9,41 @@
   <body>
     <main class="shell">
       <header class="hero">
-        <div class="top-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-          <p class="badge">anxextor</p>
+        <div class="top-bar">
+          <div class="top-bar-left">
+            <button id="theme-toggle" class="btn-3d" type="button">☀️ Light</button>
+            <div class="feedback">
+              <button id="feedback-up" class="feedback-btn" type="button" aria-label="Thumbs up">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M2 10h4v10H2V10zm6 0h8.5c.6 0 1.1.3 1.4.8l2.6 4.2c.2.3.3.7.3 1.1v.6c0 1.3-1.1 2.4-2.4 2.4H10c-.7 0-1.3-.5-1.4-1.2L8 10zM9 4.8l3.2-2.8c.3-.3.8-.4 1.2-.2.4.2.6.6.6 1v4.2H9z"
+                  />
+                </svg>
+                <span id="feedback-up-count" class="feedback-count">0</span>
+              </button>
+              <button id="feedback-down" class="feedback-btn" type="button" aria-label="Thumbs down">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M2 4h4v10H2V4zm6 10h8.5c.6 0 1.1-.3 1.4-.8l2.6-4.2c.2-.3.3-.7.3-1.1v-.6c0-1.3-1.1-2.4-2.4-2.4H10c-.7 0-1.3.5-1.4 1.2L8 14zM9 19.2l3.2 2.8c.3.3.8.4 1.2.2.4-.2.6-.6.6-1v-4.2H9z"
+                  />
+                </svg>
+                <span id="feedback-down-count" class="feedback-count">0</span>
+              </button>
+            </div>
+          </div>
+          <div></div>
           <div id="auth-nav" class="auth-navigation"></div>
         </div>
-        <div class="toolbar">
-          <div class="feedback">
-            <button id="feedback-up" class="feedback-btn" type="button" aria-label="Thumbs up">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="M2 10h4v10H2V10zm6 0h8.5c.6 0 1.1.3 1.4.8l2.6 4.2c.2.3.3.7.3 1.1v.6c0 1.3-1.1 2.4-2.4 2.4H10c-.7 0-1.3-.5-1.4-1.2L8 10zM9 4.8l3.2-2.8c.3-.3.8-.4 1.2-.2.4.2.6.6.6 1v4.2H9z"
-                />
-              </svg>
-              <span id="feedback-up-count" class="feedback-count">0</span>
-            </button>
-            <button id="feedback-down" class="feedback-btn" type="button" aria-label="Thumbs down">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="M2 4h4v10H2V4zm6 10h8.5c.6 0 1.1-.3 1.4-.8l2.6-4.2c.2-.3.3-.7.3-1.1v-.6c0-1.3-1.1-2.4-2.4-2.4H10c-.7 0-1.3.5-1.4 1.2L8 14zM9 19.2l3.2 2.8c.3.3.8.4 1.2.2.4-.2.6-.6.6-1v-4.2H9z"
-                />
-              </svg>
-              <span id="feedback-down-count" class="feedback-count">0</span>
-            </button>
-          </div>
-          <button id="theme-toggle" class="btn-3d" type="button">Light mode</button>
-        </div>
-        <h1>Web security scanner</h1>
+        <a class="logo-wordmark hero-logo" href="/" aria-label="Home">
+          <span class="wordmark-text">ANX</span>
+          <img
+            src="/static/the-cleveland-museum-of-art-xfQwRjnF6gc-unsplash-removebg-preview.png"
+            alt="anxextor logo"
+            loading="lazy"
+          />
+          <span class="wordmark-text">XTOR</span>
+        </a>
+        <h1>web security scanner</h1>
         <p class="sub">
           Scan headers, TLS, and DNS posture in seconds. Get a score and
           actionable fixes.

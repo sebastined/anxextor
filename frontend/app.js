@@ -59,6 +59,33 @@ function getCurrentUser() {
   return userStr ? JSON.parse(userStr) : null;
 }
 
+function showLoginBanner() {
+  // Remove any existing banner
+  const existingBanner = document.getElementById('login-banner');
+  if (existingBanner) {
+    existingBanner.remove();
+  }
+  
+  // Create and show banner
+  const banner = document.createElement('div');
+  banner.id = 'login-banner';
+  banner.className = 'login-banner';
+  banner.innerHTML = `
+    <p>📝 Please login with GitHub to export PDF reports</p>
+    <div class="login-banner-links">
+      <a href="/static/auth.html?provider=github">Login with GitHub</a>
+    </div>
+  `;
+  document.body.appendChild(banner);
+  
+  // Auto-remove after 5 seconds
+  setTimeout(() => {
+    if (banner.parentNode) {
+      banner.remove();
+    }
+  }, 5000);
+}
+
 function initAuthUI() {
   if (!authNavEl) return;
   
@@ -68,15 +95,18 @@ function initAuthUI() {
     const profilePic = user?.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=1976d2&color=fff&size=32`;
     
     authNavEl.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.1); padding: 8px 15px; border-radius: 20px;">
-        <img src="${profilePic}" alt="Profile" style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid white;">
-        <a href="/static/profile.html" style="color: white; text-decoration: none; font-weight: 500;">${displayName}</a>
-      </div>
+      <a href="/static/profile.html" style="display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.1); padding: 8px 15px; border-radius: 20px; text-decoration: none; color: white;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+        <span style="font-weight: 500; font-size: 14px;">${displayName}</span>
+      </a>
     `;
   } else {
     authNavEl.innerHTML = `
-      <a href="/static/auth.html" class="btn-3d" style="padding: 8px 16px; font-size: 14px;">
-        🔐 Login
+      <a href="/static/auth.html" class="btn-3d" style="padding: 8px 16px; font-size: 14px; background: var(--accent); color: var(--button-text);">
+        👤 Login
       </a>
     `;
   }
@@ -660,10 +690,7 @@ pdfBtn.addEventListener("click", async () => {
   // Check authentication
   const token = getAuthToken();
   if (!token) {
-    statusEl.textContent = "⚠️ Please login to export PDF reports";
-    if (confirm("You need to login to export PDF reports. Go to login page?")) {
-      window.location.href = "/static/auth.html";
-    }
+    showLoginBanner();
     return;
   }
   
